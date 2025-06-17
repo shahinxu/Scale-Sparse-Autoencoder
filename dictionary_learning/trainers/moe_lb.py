@@ -297,17 +297,17 @@ class MoETrainer(SAETrainer):
         l2_loss = e.pow(2).sum(dim=-1).mean()
         auxk_loss = auxk_loss.sum(dim=-1).mean()
 
-        decoder_matrix = self.ae.decoder
+        # decoder_matrix = self.ae.decoder
 
-        decoder_normed = decoder_matrix / decoder_matrix.norm(dim=1, keepdim=True)
+        # decoder_normed = decoder_matrix / decoder_matrix.norm(dim=1, keepdim=True)
 
-        sim_matrix = decoder_normed @ decoder_normed.T
+        # sim_matrix = decoder_normed @ decoder_normed.T
 
-        sim_matrix.fill_diagonal_(-float("inf"))
+        # sim_matrix.fill_diagonal_(-float("inf"))
 
-        max_sim = sim_matrix.max(dim=1).values
+        # max_sim = sim_matrix.max(dim=1).values
 
-        sum_max_sim = max_sim.sum()
+        # sum_max_sim = max_sim.sum()
 
         # decoder_matrix = self.ae.decoder
         # expert_dict_size = self.ae.expert_dict_size
@@ -341,7 +341,7 @@ class MoETrainer(SAETrainer):
         # sim_int = t.stack(sim_ints).mean()
         # sim_loss = (sim_ext + sim_int * 0) * expert_dict_size
 
-        loss = l2_loss + lb_loss_weight * lb_loss * self.ae.activation_dim + sum_max_sim * sum_max_sim_weight
+        loss = l2_loss + lb_loss_weight * lb_loss * self.ae.activation_dim
 
         if not logging:
             return loss

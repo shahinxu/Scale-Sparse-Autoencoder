@@ -79,5 +79,4 @@ class FuzzingScorer(Classifier, Scorer):
                     **defaults,
                 )
             )
-
         return samples

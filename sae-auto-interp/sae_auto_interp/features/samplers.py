@@ -16,15 +16,12 @@ def split_activation_quantiles(
 
     max_activation = examples[0].max_activation
     thresholds = [max_activation * i / n_quantiles for i in range(1, n_quantiles)]
-
     samples = []
     examples = deque(examples)
-
     for threshold in thresholds:
         quantile = []
         while examples and examples[0].max_activation < threshold:
             quantile.append(examples.popleft())
-
         sample = random.sample(quantile, n_samples)
         samples.append(sample)
 

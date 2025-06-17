@@ -334,7 +334,7 @@ class MoETrainer(SAETrainer):
         # sim_loss = (sim_ext + sim_int * 0.3) * self.ae.dict_size
 
         loss = l2_loss + lb_loss_weight * lb_loss * self.activation_dim 
-        # print(f"l2_loss: {l2_loss.item():.4f}, lb_loss: {lb_loss.item():.4f}, loss: {loss.item():.4f}")
+
         if not logging:
             return loss
         else:

@@ -18,7 +18,6 @@ def _to_dense(tokens, activations, locations):
     unique_batch_pos = torch.unique(locations[:, 0])
     token_batches = tokens[unique_batch_pos]
     dense_activations = dense_activations[unique_batch_pos]
-
     return token_batches, dense_activations
 
 

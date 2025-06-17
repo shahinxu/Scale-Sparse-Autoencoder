@@ -10,6 +10,7 @@ from .trainers.standard import StandardTrainer
 import wandb
 import json
 from .utils import cfg_filename
+import gc
 # from .evaluation import evaluate
 
 def trainSAE(
@@ -148,7 +149,9 @@ def trainSAE(
         # training
         for trainer in trainers:
             trainer.update(step, act)
-    
+        del act, act_hat, f, losslog
+        gc.collect()
+        t.cuda.empty_cache()
     # save final SAEs
     for save_dir, trainer in zip(save_dirs, trainers):
         if save_dir is not None:
