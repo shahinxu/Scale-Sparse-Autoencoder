@@ -68,13 +68,14 @@ class MoEAutoEncoder(Dictionary, nn.Module):
         self.b_gate = nn.Parameter(t.zeros(activation_dim))
         self.total_steps = cfg.steps
 
-        # self.omega = nn.Parameter(t.zeros(experts), requires_grad=True)
+        self.omega = nn.Parameter(t.zeros(experts), requires_grad=True)
+        self.beta = nn.Parameter(t.zeros(experts), requires_grad=True)
 
     def encode(self, x):
-        # encoder_M = self.encoder.weight
-        # M_hat, _, _ = self.decompose_low_high(encoder_M)
-        # z = nn.functional.relu(nn.functional.linear(x - self.b_dec, M_hat, self.encoder.bias))
-        z = nn.functional.relu(self.encoder(x - self.b_dec))
+        encoder_M = self.encoder.weight
+        M_hat, _, _ = self.decompose_low_high(encoder_M, self.omega)
+        z = nn.functional.relu(nn.functional.linear(x - self.b_dec, M_hat, self.encoder.bias))
+        # z = nn.functional.relu(self.encoder(x - self.b_dec))
         gate = nn.functional.relu(self.gate(x - self.b_gate))
 
         top_values, top_indices = gate.topk(self.e, dim=-1)
@@ -90,7 +91,7 @@ class MoEAutoEncoder(Dictionary, nn.Module):
 
     def decode(self, top_acts, top_indices):
         decoder_matrix = self.decoder
-        # decoder_matrix, _, _ = self.decompose_low_high(decoder_matrix)
+        decoder_matrix, _, _ = self.decompose_low_high(decoder_matrix, self.beta)
         d = TritonDecoder.apply(top_indices, top_acts, decoder_matrix.mT)
         return d + self.b_dec
 
@@ -99,24 +100,24 @@ class MoEAutoEncoder(Dictionary, nn.Module):
         top_acts, top_indices = f.topk(self.k, sorted=False)
         x_hat = self.decode(top_acts, top_indices).view(x.shape)
         f = f.view(*x.shape[:-1], f.shape[-1])
-        
+
         if not output_features:
             return x_hat
         else:
             return x_hat, f
         
-    def decompose_low_high(self, M):
+    def decompose_low_high(self, M, scale: t.Tensor):
         dict_size = M.size(0)
         activation_dim = M.size(1)
         expert_dict_size = self.expert_dict_size
         experts = self.experts
 
         M_reshaped = M.view(experts, expert_dict_size, activation_dim)
-        omega_expanded = self.omega.view(experts, 1, 1)
+        scale_expanded = scale.view(experts, 1, 1)
         n = activation_dim
         A_LP = (1 / n) * t.ones_like(M_reshaped)
         A_HP = M_reshaped - A_LP
-        M_hat = A_LP + (omega_expanded + 1) * A_HP
+        M_hat = A_LP + (scale_expanded + 1) * A_HP
         return (
             M_hat.view(dict_size, activation_dim),
             A_LP.view(dict_size, activation_dim),
@@ -191,6 +192,7 @@ class MoETrainer(SAETrainer):
         self.experts = experts
         self.e = e
         self.heaviside = heaviside
+        self.dict_size = dict_size
         if seed is not None:
             t.manual_seed(seed)
             t.cuda.manual_seed_all(seed)
@@ -233,7 +235,12 @@ class MoETrainer(SAETrainer):
         f = self.ae.encode(x)
         top_acts, top_indices = f.topk(self.k, sorted=False)
         x_hat = self.ae.decode(top_acts, top_indices)
-
+        # expert_ids = top_indices // (self.dict_size // self.experts)
+        # expert_ids = expert_ids[0]
+        # expert_count = t.zeros(self.experts, device=expert_ids.device, dtype=t.long)
+        # for i in range(self.experts):
+        #     expert_count[i] = (expert_ids == i).sum()
+        # print(f"Expert count: {expert_count.tolist()}")
         # Measure goodness of reconstruction
         e = x_hat - x
         total_variance = (x - x.mean(0)).pow(2).sum(0)
@@ -291,7 +298,7 @@ class MoETrainer(SAETrainer):
 
         lb_loss = self.experts * t.dot(flb, P)
 
-        lb_loss_weight = 3
+        lb_loss_weight = 0.01
         sum_max_sim_weight = 0
 
         l2_loss = e.pow(2).sum(dim=-1).mean()
@@ -309,39 +316,39 @@ class MoETrainer(SAETrainer):
 
         # sum_max_sim = max_sim.sum()
 
-        # decoder_matrix = self.ae.decoder
-        # expert_dict_size = self.ae.expert_dict_size
-        # experts = self.ae.experts
+        decoder_matrix = self.ae.decoder
+        expert_dict_size = self.ae.expert_dict_size
+        experts = self.ae.experts
 
-        # expert_centers = []
-        # for expert in range(experts):
-        #     start = expert * expert_dict_size
-        #     end = (expert + 1) * expert_dict_size
-        #     expert_features = decoder_matrix[start:end]
-        #     center = expert_features.mean(dim=0, keepdim=True)
-        #     expert_centers.append(center)
-        # expert_centers = t.cat(expert_centers, dim=0)
+        expert_centers = []
+        for expert in range(experts):
+            start = expert * expert_dict_size
+            end = (expert + 1) * expert_dict_size
+            expert_features = decoder_matrix[start:end]
+            center = expert_features.mean(dim=0, keepdim=True)
+            expert_centers.append(center)
+        expert_centers = t.cat(expert_centers, dim=0)
 
-        # centers_normed = expert_centers / expert_centers.norm(dim=1, keepdim=True)
-        # sim_matrix = centers_normed @ centers_normed.T
-        # sim_matrix.fill_diagonal_(float('-inf'))
-        # mask = ~t.eye(experts, dtype=bool, device=sim_matrix.device)
-        # sim_ext = sim_matrix[mask].mean()
+        centers_normed = expert_centers / expert_centers.norm(dim=1, keepdim=True)
+        sim_matrix = centers_normed @ centers_normed.T
+        sim_matrix.fill_diagonal_(float('-inf'))
+        mask = ~t.eye(experts, dtype=bool, device=sim_matrix.device)
+        sim_ext = sim_matrix[mask].mean()
 
-        # sim_ints = []
-        # for expert in range(experts):
-        #     start = expert * expert_dict_size
-        #     end = (expert + 1) * expert_dict_size
-        #     expert_features = decoder_matrix[start:end]
-        #     center = expert_centers[expert:expert+1]
-        #     features_normed = expert_features / expert_features.norm(dim=1, keepdim=True)
-        #     center_normed = center / center.norm(dim=1, keepdim=True)
-        #     sim = (features_normed * center_normed).sum(dim=1).mean()
-        #     sim_ints.append(sim)
-        # sim_int = t.stack(sim_ints).mean()
-        # sim_loss = (sim_ext + sim_int * 0) * expert_dict_size
+        sim_ints = []
+        for expert in range(experts):
+            start = expert * expert_dict_size
+            end = (expert + 1) * expert_dict_size
+            expert_features = decoder_matrix[start:end]
+            center = expert_centers[expert:expert+1]
+            features_normed = expert_features / expert_features.norm(dim=1, keepdim=True)
+            center_normed = center / center.norm(dim=1, keepdim=True)
+            sim = (features_normed * center_normed).sum(dim=1).mean()
+            sim_ints.append(sim)
+        sim_int = t.stack(sim_ints).mean()
+        sim_loss = (sim_ext + sim_int * 0.3) * expert_dict_size
 
-        loss = l2_loss + lb_loss_weight * lb_loss * self.ae.activation_dim
+        loss = l2_loss + lb_loss_weight * lb_loss * self.ae.activation_dim + sum_max_sim_weight * sim_loss
 
         if not logging:
             return loss

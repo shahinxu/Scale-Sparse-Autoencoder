@@ -188,8 +188,6 @@ cython_debug/
 
 *.txt
 
-results
-
-results_*
+result
 
 openwebtext2

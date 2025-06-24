@@ -7,6 +7,7 @@ from ..wrapper import AutoencoderLatents
 import os
 import sys
 sys.path.append(os.path.abspath("/home/xuzhen/switch_sae"))
+from dictionary_learning.trainers.switch import SwitchAutoEncoder
 from dictionary_learning.trainers.moe_lb import MoEAutoEncoder
 DEVICE = "cuda:4"
 
@@ -18,6 +19,8 @@ def load_oai_autoencoders(model, ae_layers: List[int], weight_dir: str):
         path = f"{weight_dir}/{layer}.pt"
         state_dict = torch.load(path)
         ae = MoEAutoEncoder(activation_dim=768, dict_size=32*768, k=32, experts=64, e=8, heaviside=False)
+        # ae = SwitchAutoEncoder(activation_dim=768, dict_size=32*768, k=32, experts=8, heaviside=False)
+
         ae.load_state_dict(state_dict)
         ae.to(DEVICE)
 
@@ -31,7 +34,7 @@ def load_oai_autoencoders(model, ae_layers: List[int], weight_dir: str):
 
         submodule = model.transformer.h[layer]
 
-        submodule.ae = AutoencoderLatents(ae, partial(_forward, ae), width=131_072)
+        submodule.ae = AutoencoderLatents(ae, partial(_forward, ae), width=32*768)
 
         submodules[submodule._path] = submodule
 

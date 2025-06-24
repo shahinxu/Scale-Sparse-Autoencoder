@@ -1,5 +1,7 @@
 from nnsight import LanguageModel
-PATH_TO_WEIGHTS = '/home/xuzhen/switch_sae/dictionaries/moe_lb_encoder_scale_10k/'
+base_path = "/home/xuzhen/switch_sae/dictionaries"
+advace_path = "moe_lb_scale_15k"
+PATH_TO_WEIGHTS = f"{base_path}/{advace_path}/"
 from sae_auto_interp.autoencoders import load_oai_autoencoders
 model = LanguageModel("/home/xuzhen/switch_sae/gpt2", device_map="auto", dispatch=True)
 submodule_dict = load_oai_autoencoders(model, [8], PATH_TO_WEIGHTS)
@@ -16,7 +18,7 @@ tokens = load_tokenized_data(
 from sae_auto_interp.features import FeatureCache
 cache = FeatureCache(model, submodule_dict, batch_size=8)
 cache.run(n_tokens=10_000_000, tokens=tokens)
-cache.save_splits(n_splits=5, save_dir="raw_features")
+cache.save_splits(n_splits=1, save_dir="raw_features")
 
 from sae_auto_interp.features import FeatureDataset
 from functools import partial
@@ -29,22 +31,23 @@ import orjson
 from sae_auto_interp.pipeline import Pipe, Pipeline, process_wrapper
 from sae_auto_interp.scorers import FuzzingScorer
 import asyncio
-fuzz_dir = "results_3/gpt2_fuzz"
-explanation_dir = "results_3/gpt2_explanations"
+import random
+fuzz_dir = f"result/{advace_path}/gpt2_fuzz"
+explanation_dir = f"result/{advace_path}/gpt2_explanations"
 
 cfg = FeatureConfig(
-    width = 131_072,
+    width = 32*768,
     min_examples = 200,
     max_examples = 10_000,
     example_ctx_len = 20,
-    n_splits = 5
+    n_splits = 1
 )
 
 sample_cfg = ExperimentConfig()
 
 modules = [f".transformer.h.{8}"]
 
-features = {mod: torch.arange(1000) for mod in modules}
+features = {mod: torch.tensor(random.sample(range(cfg.width), 1000)) for mod in modules}
 
 dataset = FeatureDataset(
     raw_dir='raw_features',

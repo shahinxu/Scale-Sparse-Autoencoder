@@ -8,6 +8,8 @@ from collections import defaultdict
 from .buffer import ActivationBuffer, NNsightActivationBuffer
 from nnsight import LanguageModel
 from .config import DEBUG
+from sklearn.manifold import TSNE
+import numpy as np
 
 
 def loss_recovered(
@@ -253,7 +255,44 @@ def evaluate(
         decoder_matrix = t.cat(decoder_weights, dim=1)
     else:
         raise AttributeError("Dictionary must have 'decoders' or 'decoder' attribute.")
-    # decoder_matrix, _, _ = decompose_low_high(decoder_matrix, dictionary.omega)
+    
+    # t-SNE projection and plotting of decoder features, colored by expert
+    try:
+        import matplotlib.pyplot as plt
+
+        # Determine number of experts and features per expert
+        experts = dictionary.experts
+        features_per_expert = decoder_matrix.shape[0] // experts
+
+        # Compute t-SNE projection
+        tsne = TSNE(n_components=2, random_state=0, init="pca", learning_rate="auto")
+        decoder_proj = tsne.fit_transform(decoder_matrix.detach().cpu().numpy())
+
+        # Assign colors by expert
+        colors = plt.cm.get_cmap("tab20", experts)
+        expert_ids = np.repeat(np.arange(experts), features_per_expert)
+
+        plt.figure(figsize=(6, 6))
+        for i in range(experts):
+            idx = expert_ids == i
+            plt.scatter(
+                decoder_proj[idx, 0],
+                decoder_proj[idx, 1],
+                s=10,
+                color=colors(i),
+                label=f"Expert {i+1}",
+                alpha=0.7,
+            )
+        plt.title("t-SNE projection of decoder features")
+        plt.legend(markerscale=2, bbox_to_anchor=(1.05, 1), loc="upper left")
+        plt.tight_layout()
+        plt.savefig("decoder_tsne.png", dpi=300)
+        plt.close()
+    except ImportError:
+        if DEBUG:
+            print("sklearn or matplotlib not installed, skipping t-SNE plot.")
+    
+    decoder_matrix, _, _ = decompose_low_high(decoder_matrix, dictionary.beta)
     decoder_normed = decoder_matrix / decoder_matrix.norm(dim=1, keepdim=True)
     sim_matrix = decoder_normed @ decoder_normed.T
     sim_matrix.fill_diagonal_(-float("inf"))
@@ -263,18 +302,18 @@ def evaluate(
 
     return out
 
-def decompose_low_high(M, omega):
+def decompose_low_high(M, beta):
     dict_size = M.size(0)
     activation_dim = M.size(1)
     experts = 64
     expert_dict_size = dict_size // experts
 
     M_reshaped = M.view(experts, expert_dict_size, activation_dim)
-    omega_expanded = omega.view(experts, 1, 1)
+    beta_expanded = beta.view(experts, 1, 1)
     n = activation_dim
     A_LP = (1 / n) * t.ones_like(M_reshaped)
     A_HP = M_reshaped - A_LP
-    M_hat = A_LP + (omega_expanded + 1) * A_HP
+    M_hat = A_LP + (beta_expanded + 1) * A_HP
     return (
         M_hat.view(dict_size, activation_dim),
         A_LP.view(dict_size, activation_dim),
