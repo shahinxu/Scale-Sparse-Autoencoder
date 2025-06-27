@@ -90,7 +90,6 @@ class Classifier(Scorer):
                 array, probabilities = self._parse(selections, logprobs)
         else:
             selections = await self.client.generate(prompt, **self.generation_kwargs)
-
             if selections is None:
                 array = [-1] * self.batch_size
             else:

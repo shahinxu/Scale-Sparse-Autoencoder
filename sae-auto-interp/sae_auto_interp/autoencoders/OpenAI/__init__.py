@@ -8,8 +8,12 @@ import os
 import sys
 sys.path.append(os.path.abspath("/home/xuzhen/switch_sae"))
 from dictionary_learning.trainers.switch import SwitchAutoEncoder
-from dictionary_learning.trainers.moe_lb import MoEAutoEncoder
-DEVICE = "cuda:4"
+from dictionary_learning.trainers.moe_logically_scale_noise import ScaleNoiseAutoEncoder
+from dictionary_learning.trainers.moe_logically_noise import NoiseAutoEncoder
+from dictionary_learning.trainers.moe_logically import MoeAutoEncoder
+from dictionary_learning.trainers.moe_logically_scale import ScaleAutoEncoder
+from dictionary_learning.trainers.moe_physically import MultiExpertAutoEncoder
+DEVICE = "cuda:5"
 
 
 def load_oai_autoencoders(model, ae_layers: List[int], weight_dir: str):
@@ -18,8 +22,12 @@ def load_oai_autoencoders(model, ae_layers: List[int], weight_dir: str):
     for layer in ae_layers:
         path = f"{weight_dir}/{layer}.pt"
         state_dict = torch.load(path)
-        ae = MoEAutoEncoder(activation_dim=768, dict_size=32*768, k=32, experts=64, e=8, heaviside=False)
-        # ae = SwitchAutoEncoder(activation_dim=768, dict_size=32*768, k=32, experts=8, heaviside=False)
+        # ae = ScaleNoiseAutoEncoder(activation_dim=768, dict_size=32*768, k=32, experts=64, e=8, heaviside=False)
+        # ae = NoiseAutoEncoder(activation_dim=768, dict_size=32*768, k=32, experts=64, e=8, heaviside=False)
+        ae = ScaleAutoEncoder(activation_dim=768, dict_size=32*768, k=32, experts=64, e=8, heaviside=False)
+        # ae = MultiExpertAutoEncoder(activation_dim=768, dict_size=32*768, k=32, experts=64, e=8, heaviside=False)
+        # ae = MoeAutoEncoder(activation_dim=768, dict_size=32*768, k=32, experts=64, e=8, heaviside=False)
+        # ae = SwitchAutoEncoder(activation_dim=768, dict_size=32*768, k=32, experts=64, heaviside=False)
 
         ae.load_state_dict(state_dict)
         ae.to(DEVICE)

@@ -3,7 +3,7 @@ import torch as t
 from dictionary_learning import ActivationBuffer
 from dictionary_learning.training import trainSAE
 from dictionary_learning.utils import hf_dataset_to_generator, cfg_filename, str2bool
-from dictionary_learning.trainers.switch import SwitchAutoEncoder, SwitchTrainer
+from dictionary_learning.trainers.moe_logically_scale_noise import ScaleNoiseAutoEncoder, MoETrainer
 from dictionary_learning.evaluation import evaluate
 import wandb
 import argparse
@@ -17,8 +17,8 @@ parser.add_argument("--gpu", required=True)
 parser.add_argument('--dict_ratio', type=int, default=32)
 parser.add_argument("--ks", nargs="+", type=int, required=True)
 parser.add_argument("--num_experts", nargs="+", type=int, required=True)
-parser.add_argument("--lb_alphas", nargs="+", type=float, default=[0.01])
-parser.add_argument("--heavisides", nargs="+", type=str2bool, default=[False])
+parser.add_argument("--es", nargs="+", type=int, required=True)
+parser.add_argument("--heavisides", nargs="+", type=str2bool, required=True)
 args = parser.parse_args()
 
 device = f'cuda:{args.gpu}'
@@ -28,8 +28,8 @@ data = hf_dataset_to_generator(hf)
 buffer = ActivationBuffer(data, model, submodule, d_submodule=activation_dim, n_ctxs=n_ctxs, device=device)
 
 base_trainer_config = {
-    'trainer' : SwitchTrainer,
-    'dict_class' : SwitchAutoEncoder,
+    'trainer' : MoETrainer,
+    'dict_class' : ScaleNoiseAutoEncoder,
     'activation_dim' : activation_dim,
     'dict_size' : args.dict_ratio * activation_dim,
     'auxk_alpha' : 1/32,
@@ -39,24 +39,24 @@ base_trainer_config = {
     'device' : device,
     'layer' : layer,
     'lm_name' : lm,
-    'wandb_name' : 'SwitchAutoEncoder'
+    'wandb_name' : 'MoEAutoEncoder'
 }
 
-trainer_configs = [(base_trainer_config | {'k': combo[0], 'experts': combo[1], 'heaviside': combo[2], 'lb_alpha': combo[3]}) for combo in itertools.product(args.ks, args.num_experts, args.heavisides, args.lb_alphas)]
+trainer_configs = [(base_trainer_config | {'k': combo[0], 'experts': combo[1], 'e': combo[2], 'heaviside': combo[3]}) for combo in itertools.product(args.ks, args.num_experts, args.es, args.heavisides)]
 
-wandb.init(entity="amudide", project="Switch (LB)", config={f'{trainer_config["wandb_name"]}-{i}' : trainer_config for i, trainer_config in enumerate(trainer_configs)})
+wandb.init(entity="amudide", project="MoE", config={f'{trainer_config["wandb_name"]}-{i}' : trainer_config for i, trainer_config in enumerate(trainer_configs)})
 
 trainSAE(buffer, trainer_configs=trainer_configs, save_dir='dictionaries', log_steps=1, steps=steps)
 
 print("Training finished. Evaluating SAE...", flush=True)
 with open("metrics_log.jsonl", "a") as f:
     for i, trainer_config in enumerate(trainer_configs):
-        ae = SwitchAutoEncoder.from_pretrained(
+        ae = ScaleNoiseAutoEncoder.from_pretrained(
             f'dictionaries/{cfg_filename(trainer_config)}/ae.pt',
             k=trainer_config['k'], experts=trainer_config['experts'],
-            heaviside=trainer_config['heaviside'], device=device
+            e=trainer_config['e'], heaviside=trainer_config['heaviside'], device=device
         )
-        metrics = evaluate(ae, buffer, device=device)
+        metrics = evaluate(ae, buffer, device=device, using_decompose=True)
         safe_config = {k: (str(v) if callable(v) or isinstance(v, type) else v) for k, v in trainer_config.items()}
         record = {"trainer_config": safe_config, "metrics": metrics}
         f.write(json.dumps(record, ensure_ascii=False, default=str) + "\n")
@@ -65,8 +65,8 @@ wandb.finish()
 
 # with open("metrics_log.jsonl", "a") as f:
 #     for i, trainer_config in enumerate(trainer_configs):
-#         ae = SwitchAutoEncoder(activation_dim=768, dict_size=32*768, k=32, experts=8, heaviside=False)
-#         ae.load_state_dict(t.load("/home/xuzhen/switch_sae/dictionaries/gpu_0/8.pt"))
+#         ae = MoEAutoEncoder(activation_dim=768, dict_size=32*768, k=32, experts=64, e=8, heaviside=False)
+#         ae.load_state_dict(t.load("/home/xuzhen/switch_sae/dictionaries/gpu_5/8.pt"))
 #         ae.to(device)
 #         metrics = evaluate(ae, buffer, device=device)
 #         safe_config = {k: (str(v) if callable(v) or isinstance(v, type) else v) for k, v in trainer_config.items()}

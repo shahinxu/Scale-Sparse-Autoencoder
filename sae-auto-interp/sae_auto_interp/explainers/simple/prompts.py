@@ -8,7 +8,9 @@ You will be given a list of text examples on which the neuron activates. The spe
 
 - Try to produce a concise final description. Simply describe the text features that activate the neuron, and what its role might be based on the tokens it predicts.
 - If either the text features or the predicted tokens are completely uninformative, you don't need to mention them.
-- The last line of your response must be the formatted explanation."""
+- The last line of your response must be the formatted explanation.
+- Finally, you must also provide explanatory keywords. If you believe that these examples have more than one meaning, 
+for example, n different meanings, use [keyword 1], [keyword 2], ..., [keyword n] to indicate this."""
 
 COT = """
 (Part 1) Tokens that the neuron activates highly on in text
@@ -101,7 +103,7 @@ SIMILAR TOKENS: "elated", "joyful", "thrilled".
 """
 
 EXAMPLE_1_EXPLANATION = """
-[EXPLANATION]: Common idioms in text conveying positive sentiment.
+[EXPLANATION]: Common idioms in text conveying positive sentiment. [positive sentiment]
 """
 
 ### EXAMPLE 2 ###
@@ -173,7 +175,7 @@ SIMILAR TOKENS: None
 """
 
 EXAMPLE_2_EXPLANATION = """
-[EXPLANATION]: The token "er" at the end of a comparative adjective describing size.
+[EXPLANATION]: The token "er" at the end of a comparative adjective describing size. [comparative adjective]
 """
 
 ### EXAMPLE 3 ###
@@ -248,7 +250,30 @@ SIMILAR TOKENS: "room", "container", "space".
 """
 
 EXAMPLE_3_EXPLANATION = """
-[EXPLANATION]: Nouns preceding a quotation mark, representing a distinct objects that contains something.
+[EXPLANATION]: Nouns preceding a quotation mark, representing a distinct objects that contains something. [containing something]
+"""
+
+# EXAMPLE 4
+EXAMPLE_4 = """
+Example 1:  the <<cat>> was sitting on the mat.
+Example 2:  Oh, I do not want to <<go>> to school.
+Example 3:  Get matched with students best-suited to your teaching style and <<expertise>>. 
+"""
+
+EXAMPLE_4_ACTIVATIONS = """
+Example 1:  the <<cat>> was sitting on the mat.
+Activations: ("cat", 6)
+Example 2:  Oh, I do not want to <<go>> to school.
+Activations: ("go", 4)
+Example 3:  Get matched with students best-suited to your teaching style and <<expertise>>. 
+Activations: ("expertise", 5)
+"""
+
+EXAMPLE_4_EXPLANATION = """
+[EXPLANATION]: The noun \cat\ means a small domesticated feline animal, 
+the verb \go\ means to move from one place to another, 
+and the noun \expertise\ means specialized knowledge or skill in a particular area. 
+[animal], [move], [skill in a particular area]
 """
 
 

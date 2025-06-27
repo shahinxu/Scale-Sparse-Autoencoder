@@ -55,12 +55,12 @@ class Expert(nn.Module):
         norm = t.norm(self.decoder.weight.data, dim=0, keepdim=True)
         self.decoder.weight.data /= norm + eps
 
-class MoEAutoEncoder(nn.Module):
+class MultiExpertAutoEncoder(nn.Module):
     def __init__(self, activation_dim, dict_size, k, experts, e, heaviside=False):
         super().__init__()
         self.activation_dim = activation_dim
         self.dict_size = dict_size
-        self.k = k // e  # k is the total number of features, divided by the number of experts
+        self.k = k
         self.experts = experts
         self.e = e
         self.heaviside = heaviside
@@ -106,31 +106,20 @@ class MoEAutoEncoder(nn.Module):
         return f_total
 
     def decode(self, f):
-        """
-        解码过程：使用稀疏特征向量重构输入
-        参数：
-            f: 稀疏特征向量 (batch_size, dict_size)
-        返回：重构数据 (batch_size, activation_dim)
-        """
         batch_size = f.size(0)
         x_hat = t.zeros(batch_size, self.activation_dim, device=f.device)
-        
-        f_experts = f.view(batch_size, self.experts, self.expert_dict_size)
-        
-        for expert_idx in range(self.experts):
-            expert = self.expert_modules[expert_idx]
-            f_segment = f_experts[:, expert_idx, :]
-            top_values, top_indices = f_segment.topk(self.k, dim=-1)
-            # print(self.k)
-            # print(top_indices)
-            sparse_f_segment = t.zeros_like(f_segment)
-            sparse_f_segment.scatter_(-1, top_indices, top_values)
-            # 打印第一个样本的完整 sparse_f_segment
-            # print(sparse_f_segment[0].cpu().detach().numpy().tolist())
-            if not t.all(f_segment == 0):
-                expert_output = expert.decoder(sparse_f_segment)
-                x_hat += expert_output
-        
+
+        top_values, top_indices = f.topk(self.k, dim=-1)
+        sparse_f = t.zeros_like(f)
+        sparse_f.scatter_(1, top_indices, top_values)
+
+        for expert_idx, expert in enumerate(self.expert_modules):
+            start = expert_idx * self.expert_dict_size
+            end = (expert_idx + 1) * self.expert_dict_size
+            f_segment = sparse_f[:, start:end]
+            if f_segment.abs().sum() > 0:
+                x_hat += expert.decoder(f_segment)
+
         return x_hat + self.b_dec
 
     def forward(self, x, output_features=False):
@@ -155,7 +144,7 @@ class MoEAutoEncoder(nn.Module):
     @staticmethod
     def decompose_low_high(M, ratio=0.2):
         M_fft = t.fft.fft2(M)
-        M_fft_low = MoEAutoEncoder.lowpass_filter(M_fft, ratio)
+        M_fft_low = MultiExpertAutoEncoder.lowpass_filter(M_fft, ratio)
         M_fft_high = M_fft - M_fft_low
         M_low = t.fft.ifft2(M_fft_low).real
         M_high = t.fft.ifft2(M_fft_high).real
@@ -191,7 +180,7 @@ class MoEAutoEncoder(nn.Module):
         Load a pretrained autoencoder from a file.
         """
         state_dict = t.load(path)
-        autoencoder = MoEAutoEncoder(activation_dim, dict_size, k, experts, e, heaviside)
+        autoencoder = MultiExpertAutoEncoder(activation_dim, dict_size, k, experts, e, heaviside)
         autoencoder.load_state_dict(state_dict)
         if device is not None:
             autoencoder.to(device)
@@ -202,7 +191,7 @@ class MoETrainer(SAETrainer):
     MoE SAE training scheme.
     """
     def __init__(self,
-                 dict_class=MoEAutoEncoder,
+                 dict_class=MultiExpertAutoEncoder,
                  activation_dim=512,
                  dict_size=64*512,
                  k=100,

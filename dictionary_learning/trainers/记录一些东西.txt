@@ -1,0 +1,81 @@
+        # decoder_matrix = self.ae.decoder
+
+        # decoder_normed = decoder_matrix / decoder_matrix.norm(dim=1, keepdim=True)
+
+        # sim_matrix = decoder_normed @ decoder_normed.T
+
+        # sim_matrix.fill_diagonal_(-float("inf"))
+
+        # max_sim = sim_matrix.max(dim=1).values
+
+        # sum_max_sim = max_sim.sum()
+
+        # decoder_matrix = self.ae.decoder
+        # expert_dict_size = self.ae.expert_dict_size
+        # experts = self.ae.experts
+
+        # expert_centers = []
+        # for expert in range(experts):
+        #     start = expert * expert_dict_size
+        #     end = (expert + 1) * expert_dict_size
+        #     expert_features = decoder_matrix[start:end]
+        #     center = expert_features.mean(dim=0, keepdim=True)
+        #     expert_centers.append(center)
+        # expert_centers = t.cat(expert_centers, dim=0)
+
+        # centers_normed = expert_centers / expert_centers.norm(dim=1, keepdim=True)
+        # sim_matrix = centers_normed @ centers_normed.T
+        # sim_matrix.fill_diagonal_(float('-inf'))
+        # mask = ~t.eye(experts, dtype=bool, device=sim_matrix.device)
+        # sim_ext = sim_matrix[mask].mean()
+
+        # sim_ints = []
+        # for expert in range(experts):
+        #     start = expert * expert_dict_size
+        #     end = (expert + 1) * expert_dict_size
+        #     expert_features = decoder_matrix[start:end]
+        #     center = expert_centers[expert:expert+1]
+        #     features_normed = expert_features / expert_features.norm(dim=1, keepdim=True)
+        #     center_normed = center / center.norm(dim=1, keepdim=True)
+        #     sim = (features_normed * center_normed).sum(dim=1).mean()
+        #     sim_ints.append(sim)
+        # sim_int = t.stack(sim_ints).mean()
+        # sim_loss = (sim_ext + sim_int * 0.3) * expert_dict_size
+
+
+
+
+    # try:
+    #     import matplotlib.pyplot as plt
+
+    #     # Determine number of experts and features per expert
+    #     experts = dictionary.experts
+    #     features_per_expert = decoder_matrix.shape[0] // experts
+
+    #     # Compute t-SNE projection
+    #     tsne = TSNE(n_components=2, random_state=0, init="pca", learning_rate="auto")
+    #     decoder_proj = tsne.fit_transform(decoder_matrix.detach().cpu().numpy())
+
+    #     # Assign colors by expert
+    #     colors = plt.cm.get_cmap("tab20", experts)
+    #     expert_ids = np.repeat(np.arange(experts), features_per_expert)
+
+    #     plt.figure(figsize=(6, 6))
+    #     for i in range(experts):
+    #         idx = expert_ids == i
+    #         plt.scatter(
+    #             decoder_proj[idx, 0],
+    #             decoder_proj[idx, 1],
+    #             s=10,
+    #             color=colors(i),
+    #             label=f"Expert {i+1}",
+    #             alpha=0.7,
+    #         )
+    #     plt.title("t-SNE projection of decoder features")
+    #     plt.legend(markerscale=2, bbox_to_anchor=(1.05, 1), loc="upper left")
+    #     plt.tight_layout()
+    #     plt.savefig("decoder_tsne.png", dpi=300)
+    #     plt.close()
+    # except ImportError:
+    #     if DEBUG:
+    #         print("sklearn or matplotlib not installed, skipping t-SNE plot.")

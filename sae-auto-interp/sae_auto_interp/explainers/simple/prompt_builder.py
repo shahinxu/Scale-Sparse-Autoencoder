@@ -8,7 +8,7 @@ def build_examples(
 ):
     examples = []
 
-    for i in range(1, 4):
+    for i in range(1, 5):
         prompt, response = example(i, **kwargs)
 
         messages = [

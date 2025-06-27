@@ -41,7 +41,7 @@ def geometric_median(points: t.Tensor, max_iter: int = 100, tol: float = 1e-5):
     return guess
 
 
-class MoEAutoEncoder(Dictionary, nn.Module):
+class MoeAutoEncoder(Dictionary, nn.Module):
     """
     The MoE autoencoder architecture
     """
@@ -71,11 +71,11 @@ class MoEAutoEncoder(Dictionary, nn.Module):
         self.omega = nn.Parameter(t.zeros(experts), requires_grad=True)
         self.beta = nn.Parameter(t.zeros(experts), requires_grad=True)
 
+        self.lp_transform = t.nn.Linear(activation_dim, activation_dim, bias=False)
+        t.nn.init.eye_(self.lp_transform.weight)
+
     def encode(self, x):
-        encoder_M = self.encoder.weight
-        M_hat, _, _ = self.decompose_low_high(encoder_M, self.omega)
-        z = nn.functional.relu(nn.functional.linear(x - self.b_dec, M_hat, self.encoder.bias))
-        # z = nn.functional.relu(self.encoder(x - self.b_dec))
+        z = nn.functional.relu(self.encoder(x - self.b_dec))
         gate = nn.functional.relu(self.gate(x - self.b_gate))
 
         top_values, top_indices = gate.topk(self.e, dim=-1)
@@ -87,12 +87,13 @@ class MoEAutoEncoder(Dictionary, nn.Module):
             top_e = (top_e > 0).float()
 
         top_e_expanded = einops.repeat(top_e, '... e -> ... (e d)', d=self.expert_dict_size)
-        return z * top_e_expanded
+
+        z = z * top_e_expanded
+
+        return z
 
     def decode(self, top_acts, top_indices):
-        decoder_matrix = self.decoder
-        decoder_matrix, _, _ = self.decompose_low_high(decoder_matrix, self.beta)
-        d = TritonDecoder.apply(top_indices, top_acts, decoder_matrix.mT)
+        d = TritonDecoder.apply(top_indices, top_acts, self.decoder.mT)
         return d + self.b_dec
 
     def forward(self, x, output_features=False):
@@ -105,24 +106,7 @@ class MoEAutoEncoder(Dictionary, nn.Module):
             return x_hat
         else:
             return x_hat, f
-        
-    def decompose_low_high(self, M, scale: t.Tensor):
-        dict_size = M.size(0)
-        activation_dim = M.size(1)
-        expert_dict_size = self.expert_dict_size
-        experts = self.experts
-
-        M_reshaped = M.view(experts, expert_dict_size, activation_dim)
-        scale_expanded = scale.view(experts, 1, 1)
-        n = activation_dim
-        A_LP = (1 / n) * t.ones_like(M_reshaped)
-        A_HP = M_reshaped - A_LP
-        M_hat = A_LP + (scale_expanded + 1) * A_HP
-        return (
-            M_hat.view(dict_size, activation_dim),
-            A_LP.view(dict_size, activation_dim),
-            A_HP.view(dict_size, activation_dim),
-        )
+    
     @t.no_grad()
     def set_decoder_norm_to_unit_norm(self):
         eps = t.finfo(self.decoder.dtype).eps
@@ -150,7 +134,7 @@ class MoEAutoEncoder(Dictionary, nn.Module):
         """
         state_dict = t.load(path)
         dict_size, activation_dim = state_dict['encoder.weight'].shape
-        autoencoder = MoEAutoEncoder(activation_dim, dict_size, k, experts, e, heaviside)
+        autoencoder = MoeAutoEncoder(activation_dim, dict_size, k, experts, e, heaviside)
         autoencoder.load_state_dict(state_dict)
         if device is not None:
             autoencoder.to(device)
@@ -162,7 +146,7 @@ class MoETrainer(SAETrainer):
     MoE SAE training scheme.
     """
     def __init__(self,
-                 dict_class=MoEAutoEncoder,
+                 dict_class=MoeAutoEncoder,
                  activation_dim=512,
                  dict_size=64*512,
                  k=100,
@@ -299,56 +283,11 @@ class MoETrainer(SAETrainer):
         lb_loss = self.experts * t.dot(flb, P)
 
         lb_loss_weight = 0.01
-        sum_max_sim_weight = 0
 
         l2_loss = e.pow(2).sum(dim=-1).mean()
         auxk_loss = auxk_loss.sum(dim=-1).mean()
 
-        # decoder_matrix = self.ae.decoder
-
-        # decoder_normed = decoder_matrix / decoder_matrix.norm(dim=1, keepdim=True)
-
-        # sim_matrix = decoder_normed @ decoder_normed.T
-
-        # sim_matrix.fill_diagonal_(-float("inf"))
-
-        # max_sim = sim_matrix.max(dim=1).values
-
-        # sum_max_sim = max_sim.sum()
-
-        decoder_matrix = self.ae.decoder
-        expert_dict_size = self.ae.expert_dict_size
-        experts = self.ae.experts
-
-        expert_centers = []
-        for expert in range(experts):
-            start = expert * expert_dict_size
-            end = (expert + 1) * expert_dict_size
-            expert_features = decoder_matrix[start:end]
-            center = expert_features.mean(dim=0, keepdim=True)
-            expert_centers.append(center)
-        expert_centers = t.cat(expert_centers, dim=0)
-
-        centers_normed = expert_centers / expert_centers.norm(dim=1, keepdim=True)
-        sim_matrix = centers_normed @ centers_normed.T
-        sim_matrix.fill_diagonal_(float('-inf'))
-        mask = ~t.eye(experts, dtype=bool, device=sim_matrix.device)
-        sim_ext = sim_matrix[mask].mean()
-
-        sim_ints = []
-        for expert in range(experts):
-            start = expert * expert_dict_size
-            end = (expert + 1) * expert_dict_size
-            expert_features = decoder_matrix[start:end]
-            center = expert_centers[expert:expert+1]
-            features_normed = expert_features / expert_features.norm(dim=1, keepdim=True)
-            center_normed = center / center.norm(dim=1, keepdim=True)
-            sim = (features_normed * center_normed).sum(dim=1).mean()
-            sim_ints.append(sim)
-        sim_int = t.stack(sim_ints).mean()
-        sim_loss = (sim_ext + sim_int * 0.3) * expert_dict_size
-
-        loss = l2_loss + lb_loss_weight * lb_loss * self.ae.activation_dim + sum_max_sim_weight * sim_loss
+        loss = l2_loss + lb_loss_weight * lb_loss * self.ae.activation_dim
 
         if not logging:
             return loss

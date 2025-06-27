@@ -166,6 +166,7 @@ def evaluate(
     tracer_args={'use_cache': False, 'output_attentions': False}, # minimize cache during model trace.
     device="cpu",
     n_batches: int = 1,
+    using_decompose: bool = False
 ):
     assert n_batches > 0
     out = defaultdict(float)
@@ -252,47 +253,12 @@ def evaluate(
         decoder_matrix = dictionary.decoder
     elif hasattr(dictionary, "expert_modules"):
         decoder_weights = [expert.decoder.weight.detach() for expert in dictionary.expert_modules]
-        decoder_matrix = t.cat(decoder_weights, dim=1)
+        decoder_matrix = t.cat(decoder_weights, dim=1).T
     else:
         raise AttributeError("Dictionary must have 'decoders' or 'decoder' attribute.")
     
-    # t-SNE projection and plotting of decoder features, colored by expert
-    try:
-        import matplotlib.pyplot as plt
-
-        # Determine number of experts and features per expert
-        experts = dictionary.experts
-        features_per_expert = decoder_matrix.shape[0] // experts
-
-        # Compute t-SNE projection
-        tsne = TSNE(n_components=2, random_state=0, init="pca", learning_rate="auto")
-        decoder_proj = tsne.fit_transform(decoder_matrix.detach().cpu().numpy())
-
-        # Assign colors by expert
-        colors = plt.cm.get_cmap("tab20", experts)
-        expert_ids = np.repeat(np.arange(experts), features_per_expert)
-
-        plt.figure(figsize=(6, 6))
-        for i in range(experts):
-            idx = expert_ids == i
-            plt.scatter(
-                decoder_proj[idx, 0],
-                decoder_proj[idx, 1],
-                s=10,
-                color=colors(i),
-                label=f"Expert {i+1}",
-                alpha=0.7,
-            )
-        plt.title("t-SNE projection of decoder features")
-        plt.legend(markerscale=2, bbox_to_anchor=(1.05, 1), loc="upper left")
-        plt.tight_layout()
-        plt.savefig("decoder_tsne.png", dpi=300)
-        plt.close()
-    except ImportError:
-        if DEBUG:
-            print("sklearn or matplotlib not installed, skipping t-SNE plot.")
-    
-    decoder_matrix, _, _ = decompose_low_high(decoder_matrix, dictionary.beta)
+    if using_decompose:
+        decoder_matrix, _, _ = dictionary.decompose_low_high(decoder_matrix, dictionary.beta)
     decoder_normed = decoder_matrix / decoder_matrix.norm(dim=1, keepdim=True)
     sim_matrix = decoder_normed @ decoder_normed.T
     sim_matrix.fill_diagonal_(-float("inf"))
@@ -300,22 +266,56 @@ def evaluate(
     mean_max_sim = max_sim.mean().item()
     out["mean_decoder_max_similarity"] = mean_max_sim
 
+    num_experts = dictionary.experts
+    total_dict_size = dictionary.dict_size
+
+    if num_experts > 0 and total_dict_size > 0:
+        dict_size_per_expert = total_dict_size // num_experts
+        if total_dict_size % num_experts != 0:
+            print(f"警告：总特征数 {total_dict_size} 不能被专家数量 {num_experts} 整除。这可能导致专家宽度不均。")
+
+        intra_expert_sims = []
+        for i in range(num_experts):
+            start_idx = i * dict_size_per_expert
+            end_idx = start_idx + dict_size_per_expert
+            sim_intra_expert = sim_matrix[start_idx:end_idx, start_idx:end_idx]
+            
+            mask = ~t.eye(sim_intra_expert.shape[0], dtype=bool, device=sim_intra_expert.device)
+            valid_sims = sim_intra_expert[mask]
+            if valid_sims.numel() > 0:
+                intra_expert_sims.extend(valid_sims.tolist())
+        
+        if intra_expert_sims:
+            out["mean_intra_expert_decoder_similarity"] = float(np.mean(intra_expert_sims))
+        else:
+            out["mean_intra_expert_decoder_similarity"] = 0.0
+
+        all_inter_expert_similarities = []
+
+        if num_experts > 1:
+            for i in range(num_experts):
+                start_idx_i = i * dict_size_per_expert
+                end_idx_i = start_idx_i + dict_size_per_expert
+                
+                for j in range(num_experts):
+                    if i == j:
+                        continue
+                    
+                    start_idx_j = j * dict_size_per_expert
+                    end_idx_j = start_idx_j + dict_size_per_expert
+                    
+                    sim_i_to_j = sim_matrix[start_idx_i:end_idx_i, start_idx_j:end_idx_j]
+                    
+                    all_inter_expert_similarities.extend(sim_i_to_j.flatten().tolist())
+
+            if all_inter_expert_similarities:
+                out["mean_inter_expert_decoder_similarity"] = float(np.mean(all_inter_expert_similarities))
+            else:
+                out["mean_inter_expert_decoder_similarity"] = 0.0
+        else:
+            out["mean_inter_expert_decoder_similarity"] = 0.0
+    else:
+        out["mean_intra_expert_decoder_similarity"] = 0.0
+        out["mean_inter_expert_decoder_similarity"] = 0.0
+
     return out
-
-def decompose_low_high(M, beta):
-    dict_size = M.size(0)
-    activation_dim = M.size(1)
-    experts = 64
-    expert_dict_size = dict_size // experts
-
-    M_reshaped = M.view(experts, expert_dict_size, activation_dim)
-    beta_expanded = beta.view(experts, 1, 1)
-    n = activation_dim
-    A_LP = (1 / n) * t.ones_like(M_reshaped)
-    A_HP = M_reshaped - A_LP
-    M_hat = A_LP + (beta_expanded + 1) * A_HP
-    return (
-        M_hat.view(dict_size, activation_dim),
-        A_LP.view(dict_size, activation_dim),
-        A_HP.view(dict_size, activation_dim),
-    )
