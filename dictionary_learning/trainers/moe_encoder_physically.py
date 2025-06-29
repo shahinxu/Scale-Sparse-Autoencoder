@@ -2,9 +2,9 @@ import einops
 import torch as t
 import torch.nn as nn
 from collections import namedtuple
-
+from ..kernels import TritonDecoder
 from .trainer import SAETrainer
-
+import torch.nn.init as init
 
 @t.no_grad()
 def geometric_median(points: t.Tensor, max_iter: int = 100, tol: float = 1e-5):
@@ -39,21 +39,10 @@ class Expert(nn.Module):
         super().__init__()
         self.encoder = nn.Linear(input_dim, output_dim)
         self.encoder.bias.data.zero_()
-        
-        self.decoder = nn.Linear(output_dim, input_dim, bias=False)
-        
-        self.decoder.weight.data = self.encoder.weight.data.clone().T
-        self.set_decoder_norm_to_unit_norm()
     
     def forward(self, x):
         z = nn.functional.relu(self.encoder(x))
-        return self.decoder(z), z
-    
-    @t.no_grad()
-    def set_decoder_norm_to_unit_norm(self):
-        eps = t.finfo(self.decoder.weight.dtype).eps
-        norm = t.norm(self.decoder.weight.data, dim=0, keepdim=True)
-        self.decoder.weight.data /= norm + eps
+        return z
 
 class MultiEncAutoEncoder(nn.Module):
     def __init__(self, activation_dim, dict_size, k, experts, e, heaviside=False):
@@ -70,7 +59,10 @@ class MultiEncAutoEncoder(nn.Module):
             Expert(activation_dim, self.expert_dict_size) 
             for _ in range(experts)
         ])
-        
+        self.decoder = nn.Parameter(t.empty(dict_size, activation_dim))
+        init.kaiming_uniform_(self.decoder, a=0, mode='fan_in', nonlinearity='relu')
+        self.set_decoder_norm_to_unit_norm()
+
         self.gate = nn.Linear(activation_dim, experts)
         self.gate.bias.data.zero_()
         
@@ -105,85 +97,41 @@ class MultiEncAutoEncoder(nn.Module):
         f_total = weighted_experts.reshape(x.size(0), self.dict_size)
         return f_total
 
-    def decode(self, f):
-        """
-        解码过程：使用稀疏特征向量重构输入
-        参数：
-            f: 稀疏特征向量 (batch_size, dict_size)
-        返回：重构数据 (batch_size, activation_dim)
-        """
-        batch_size = f.size(0)
-        x_hat = t.zeros(batch_size, self.activation_dim, device=f.device)
-        
-        f_experts = f.view(batch_size, self.experts, self.expert_dict_size)
-        
-        for expert_idx in range(self.experts):
-            expert = self.expert_modules[expert_idx]
-            f_segment = f_experts[:, expert_idx, :]
-            top_values, top_indices = f_segment.topk(self.k, dim=-1)
-            # print(self.k)
-            # print(top_indices)
-            sparse_f_segment = t.zeros_like(f_segment)
-            sparse_f_segment.scatter_(-1, top_indices, top_values)
-            # 打印第一个样本的完整 sparse_f_segment
-            # print(sparse_f_segment[0].cpu().detach().numpy().tolist())
-            if not t.all(f_segment == 0):
-                expert_output = expert.decoder(sparse_f_segment)
-                x_hat += expert_output
-        
-        return x_hat + self.b_dec
+    def decode(self, top_acts, top_indices):
+        d = TritonDecoder.apply(top_indices, top_acts, self.decoder.mT)
+        return d + self.b_dec
 
     def forward(self, x, output_features=False):
         f = self.encode(x.view(-1, x.shape[-1]))
-        x_hat = self.decode(f).view(x.shape)
-        
+        top_acts, top_indices = f.topk(self.k, sorted=False)
+        x_hat = self.decode(top_acts, top_indices).view(x.shape)
+        f = f.view(*x.shape[:-1], f.shape[-1])
+
         if not output_features:
             return x_hat
         else:
             return x_hat, f
-        
-    @staticmethod
-    def lowpass_filter(fft_matrix, ratio=0.2):
-        N, M = fft_matrix.shape[-2], fft_matrix.shape[-1]
-        low_N, low_M = int(N * ratio), int(M * ratio)
-        mask = t.zeros_like(fft_matrix, dtype=t.bool)
-        center_N, center_M = N // 2, M // 2
-        mask[..., center_N - low_N//2:center_N + low_N//2,
-            center_M - low_M//2:center_M + low_M//2] = True
-        return fft_matrix * mask
-
-    @staticmethod
-    def decompose_low_high(M, ratio=0.2):
-        M_fft = t.fft.fft2(M)
-        M_fft_low = MultiEncAutoEncoder.lowpass_filter(M_fft, ratio)
-        M_fft_high = M_fft - M_fft_low
-        M_low = t.fft.ifft2(M_fft_low).real
-        M_high = t.fft.ifft2(M_fft_high).real
-        return M_low, M_high
 
     @t.no_grad()
     def set_decoder_norm_to_unit_norm(self):
-        for expert in self.expert_modules:
-            expert.set_decoder_norm_to_unit_norm()
+        eps = t.finfo(self.decoder.dtype).eps
+        norm = t.norm(self.decoder.data, dim=1, keepdim=True)
+        self.decoder.data /= norm + eps
 
     @t.no_grad()
     def remove_gradient_parallel_to_decoder_directions(self):
-        for expert in self.expert_modules:
-            decoder_weight = expert.decoder.weight
-            if decoder_weight.grad is None:
-                continue
-                
-            parallel_component = einops.einsum(
-                decoder_weight.grad,
-                decoder_weight.data,
-                "out_dim in_dim, out_dim in_dim -> out_dim",
-            )
-            
-            decoder_weight.grad -= einops.einsum(
-                parallel_component,
-                decoder_weight.data,
-                "out_dim, out_dim in_dim -> out_dim in_dim",
-            )
+        assert self.decoder.grad is not None
+
+        parallel_component = einops.einsum(
+            self.decoder.grad,
+            self.decoder.data,
+            "d_sae d_in, d_sae d_in -> d_sae",
+        )
+        self.decoder.grad -= einops.einsum(
+            parallel_component,
+            self.decoder.data,
+            "d_sae, d_sae d_in -> d_sae d_in",
+        )
 
     def from_pretrained(path, k=100, experts=16, e=1, heaviside=False, device=None
                         , activation_dim=768, dict_size=32*768):
@@ -265,7 +213,8 @@ class MoETrainer(SAETrainer):
     def loss(self, x, step=None, logging=False):
         
         f = self.ae.encode(x)
-        x_hat = self.ae.decode(f)
+        top_acts, top_indices = f.topk(self.k, sorted=False)
+        x_hat = self.ae.decode(top_acts, top_indices)
         
         e = x_hat - x
 
@@ -289,9 +238,7 @@ class MoETrainer(SAETrainer):
         l2_loss = e.pow(2).sum(dim=-1).mean()
         auxk_loss = auxk_loss.sum(dim=-1).mean()
 
-        # decoder_matrix = t.cat([d for d in self.ae.decoders], dim=0)
-        decoder_weights = [expert.decoder.weight.detach() for expert in self.ae.expert_modules]
-        decoder_matrix = t.cat(decoder_weights, dim=1)
+        decoder_matrix = self.ae.decoder.detach()
         # decoder_normed = decoder_matrix / (decoder_matrix.norm(dim=1, keepdim=True) + 1e-8)
 
         # sim_matrix = decoder_normed @ decoder_normed.T
