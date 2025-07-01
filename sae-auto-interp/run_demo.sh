@@ -2,7 +2,7 @@
 
 # --- 配置参数 ---
 # 基础 advance_path，例如 "ScaleEncoder"
-BASE_ADVANCE_PATH="ScaleAutoEncoder_5k" 
+BASE_ADVANCE_PATH="switch_15k"
 
 # 循环的次数
 NUM_RUNS=1 # 例如，如果你想运行 3 次，从 0 到 2

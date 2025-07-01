@@ -223,12 +223,7 @@ class MoETrainer(SAETrainer):
         f = self.ae.encode(x)
         top_acts, top_indices = f.topk(self.k, sorted=False)
         x_hat = self.ae.decode(top_acts, top_indices)
-        # expert_ids = top_indices // (self.dict_size // self.experts)
-        # expert_ids = expert_ids[0]
-        # expert_count = t.zeros(self.experts, device=expert_ids.device, dtype=t.long)
-        # for i in range(self.experts):
-        #     expert_count[i] = (expert_ids == i).sum()
-        # print(f"Expert count: {expert_count.tolist()}")
+
         # Measure goodness of reconstruction
         e = x_hat - x
         total_variance = (x - x.mean(0)).pow(2).sum(0)
@@ -320,22 +315,6 @@ class MoETrainer(SAETrainer):
         x = x.to(self.device)
         loss = self.loss(x, step=step)
         loss.backward()
-
-        with t.no_grad():
-            gate = self.ae.gate(x - self.ae.b_gate)
-            _, top_indices = gate.topk(self.ae.e, dim=-1)
-            activated_experts = top_indices.unique().tolist()
-            # mask for decoder
-            mask_dec = t.zeros_like(self.ae.decoder.grad)
-            # mask for encoder.weight
-            mask_enc = t.zeros_like(self.ae.encoder.weight.grad)
-            for expert in activated_experts:
-                start = expert * self.ae.expert_dict_size
-                end = (expert + 1) * self.ae.expert_dict_size
-                mask_dec[start:end, :] = 1
-                mask_enc[start:end, :] = 1
-            self.ae.decoder.grad *= mask_dec
-            self.ae.encoder.weight.grad *= mask_enc
 
         # clip grad norm and remove grads parallel to decoder directions
         t.nn.utils.clip_grad_norm_(self.ae.parameters(), 1.0)

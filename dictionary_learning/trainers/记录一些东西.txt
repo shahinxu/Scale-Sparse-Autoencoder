@@ -269,3 +269,71 @@ def plot_combined_keywords_similarity_distribution(
                 print(f"警告: 仅找到 {i} 对有效相似度。")
                 break
             print(f"相似度: {sim_val:.4f}, 特征1索引: {row_idx}, 特征2索引: {col_idx}")
+
+        with t.no_grad():
+            gate = self.ae.gate(x - self.ae.b_gate)
+            _, top_indices = gate.topk(self.ae.e, dim=-1)
+            activated_experts = top_indices.unique().tolist()
+            # mask for decoder
+            mask_dec = t.zeros_like(self.ae.decoder.grad)
+            # mask for encoder.weight
+            mask_enc = t.zeros_like(self.ae.encoder.weight.grad)
+            for expert in activated_experts:
+                start = expert * self.ae.expert_dict_size
+                end = (expert + 1) * self.ae.expert_dict_size
+                mask_dec[start:end, :] = 1
+                mask_enc[start:end, :] = 1
+            self.ae.decoder.grad *= mask_dec
+            self.ae.encoder.weight.grad *= mask_enc
+
+    num_experts = dictionary.experts
+    total_dict_size = dictionary.dict_size
+
+    if num_experts > 0 and total_dict_size > 0:
+        dict_size_per_expert = total_dict_size // num_experts
+        if total_dict_size % num_experts != 0:
+            print(f"警告：总特征数 {total_dict_size} 不能被专家数量 {num_experts} 整除。这可能导致专家宽度不均。")
+
+        intra_expert_sims = []
+        for i in range(num_experts):
+            start_idx = i * dict_size_per_expert
+            end_idx = start_idx + dict_size_per_expert
+            sim_intra_expert = sim_matrix[start_idx:end_idx, start_idx:end_idx]
+            
+            mask = ~t.eye(sim_intra_expert.shape[0], dtype=bool, device=sim_intra_expert.device)
+            valid_sims = sim_intra_expert[mask]
+            if valid_sims.numel() > 0:
+                intra_expert_sims.extend(valid_sims.tolist())
+        
+        if intra_expert_sims:
+            out["mean_intra_expert_decoder_similarity"] = float(np.mean(intra_expert_sims))
+        else:
+            out["mean_intra_expert_decoder_similarity"] = 0.0
+
+        all_inter_expert_similarities = []
+
+        if num_experts > 1:
+            for i in range(num_experts):
+                start_idx_i = i * dict_size_per_expert
+                end_idx_i = start_idx_i + dict_size_per_expert
+                
+                for j in range(num_experts):
+                    if i == j:
+                        continue
+                    
+                    start_idx_j = j * dict_size_per_expert
+                    end_idx_j = start_idx_j + dict_size_per_expert
+                    
+                    sim_i_to_j = sim_matrix[start_idx_i:end_idx_i, start_idx_j:end_idx_j]
+                    
+                    all_inter_expert_similarities.extend(sim_i_to_j.flatten().tolist())
+
+            if all_inter_expert_similarities:
+                out["mean_inter_expert_decoder_similarity"] = float(np.mean(all_inter_expert_similarities))
+            else:
+                out["mean_inter_expert_decoder_similarity"] = 0.0
+        else:
+            out["mean_inter_expert_decoder_similarity"] = 0.0
+    else:
+        out["mean_intra_expert_decoder_similarity"] = 0.0
+        out["mean_inter_expert_decoder_similarity"] = 0.0

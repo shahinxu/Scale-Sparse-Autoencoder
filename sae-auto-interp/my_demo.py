@@ -72,7 +72,7 @@ def main(advance_path_arg, loop_iteration): # 添加 loop_iteration 参数
 
     modules = [f".transformer.h.{8}"]
 
-    features = {mod: torch.tensor(random.sample(range(cfg.width), 10_000)) for mod in modules}
+    features = {mod: torch.tensor(random.sample(range(cfg.width), 20_000)) for mod in modules}
 
     dataset = FeatureDataset(
         raw_dir='raw_features',

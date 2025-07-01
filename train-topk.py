@@ -13,7 +13,7 @@ import json
 os.environ["WANDB_MODE"] = "disabled"
 parser = argparse.ArgumentParser()
 parser.add_argument("--gpu", required=True)
-parser.add_argument('--dict_ratio', type=int, default=32//32)
+parser.add_argument('--dict_ratio', type=int, default=32)
 parser.add_argument("--ks", nargs="+", type=int, required=True)
 args = parser.parse_args()
 
@@ -54,3 +54,14 @@ with open("metrics_log.jsonl", "a") as f:
         f.write(json.dumps(record, ensure_ascii=False, default=str) + "\n")
         print(record)
 wandb.finish()
+
+# with open("metrics_log.jsonl", "a") as f:
+#     for i, trainer_config in enumerate(trainer_configs):
+#         ae = AutoEncoderTopK(activation_dim=768, dict_size=32*768, k=32)
+#         ae.load_state_dict(t.load("/home/xuzhen/switch_sae/dictionaries/topk_5k/8.pt"))
+#         ae.to(device)
+#         metrics = evaluate(ae, buffer, device=device)
+#         safe_config = {k: (str(v) if callable(v) or isinstance(v, type) else v) for k, v in trainer_config.items()}
+#         record = {"trainer_config": safe_config, "metrics": metrics}
+#         f.write(json.dumps(record, ensure_ascii=False, default=str) + "\n")
+#         print(record)

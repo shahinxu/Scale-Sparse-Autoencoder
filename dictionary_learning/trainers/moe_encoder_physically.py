@@ -238,48 +238,6 @@ class MoETrainer(SAETrainer):
         l2_loss = e.pow(2).sum(dim=-1).mean()
         auxk_loss = auxk_loss.sum(dim=-1).mean()
 
-        decoder_matrix = self.ae.decoder.detach()
-        # decoder_normed = decoder_matrix / (decoder_matrix.norm(dim=1, keepdim=True) + 1e-8)
-
-        # sim_matrix = decoder_normed @ decoder_normed.T
-
-        # sim_matrix.fill_diagonal_(-float("-1e6"))
-
-        # max_sim = sim_matrix.max(dim=1).values
-
-        # sim_loss = max_sim.sum()
-
-        # expert_dict_size = self.ae.expert_dict_size
-        # experts = self.ae.experts
-
-        # expert_centers = []
-        # for expert in range(experts):
-        #     start = expert * expert_dict_size
-        #     end = (expert + 1) * expert_dict_size
-        #     expert_features = decoder_matrix[start:end]
-        #     center = expert_features.mean(dim=0, keepdim=True)
-        #     expert_centers.append(center)
-        # expert_centers = t.cat(expert_centers, dim=0)
-
-        # centers_normed = expert_centers / expert_centers.norm(dim=1, keepdim=True)
-        # sim_matrix = centers_normed @ centers_normed.T
-        # sim_matrix.fill_diagonal_(float('-inf'))
-        # sim_ext = sim_matrix.max(dim=1).values.mean()
-
-        # sim_ints = []
-        # for expert in range(experts):
-        #     start = expert * expert_dict_size
-        #     end = (expert + 1) * expert_dict_size
-        #     expert_features = decoder_matrix[start:end]
-        #     center = expert_centers[expert:expert+1]
-        #     features_normed = expert_features / expert_features.norm(dim=1, keepdim=True)
-        #     center_normed = center / center.norm(dim=1, keepdim=True)
-        #     sim = (features_normed * center_normed).sum(dim=1).mean()
-        #     sim_ints.append(sim)
-        # sim_int = t.stack(sim_ints).mean()
-
-        # sim_loss = (sim_ext + sim_int * 0.3) * self.ae.dict_size
-
         loss = l2_loss + lb_loss_weight * lb_loss * self.activation_dim 
 
         if not logging:
