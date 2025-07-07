@@ -13,6 +13,7 @@ from dictionary_learning.trainers.moe_logically import MoeAutoEncoder
 from dictionary_learning.trainers.moe_logically_scale import ScaleAutoEncoder
 from dictionary_learning.trainers.moe_physically import MultiExpertAutoEncoder
 from dictionary_learning.trainers.moe_encoder_physically import MultiEncAutoEncoder
+from dictionary_learning.trainers.moe_decoder_physically import MultiDecAutoEncoder
 DEVICE = "cuda:3"
 
 
@@ -26,8 +27,9 @@ def load_oai_autoencoders(model, ae_layers: List[int], weight_dir: str):
         # ae = ScaleAutoEncoder(activation_dim=768, dict_size=32*768, k=32, experts=64, e=8, heaviside=False)
         # ae = MultiExpertAutoEncoder(activation_dim=768, dict_size=32*768, k=32, experts=64, e=8, heaviside=False)
         # ae = MultiEncAutoEncoder(activation_dim=768, dict_size=32*768, k=32, experts=64, e=8, heaviside=False)
+        ae = MultiDecAutoEncoder(activation_dim=768, dict_size=32*768, k=32, experts=64, e=8, heaviside=False)
         # ae = MoeAutoEncoder(activation_dim=768, dict_size=32*768, k=32, experts=64, e=8, heaviside=False)
-        ae = SwitchAutoEncoder(activation_dim=768, dict_size=32*768, k=32, experts=64, heaviside=False)
+        # ae = SwitchAutoEncoder(activation_dim=768, dict_size=32*768, k=32, experts=64, heaviside=False)
 
         ae.load_state_dict(state_dict)
         ae.to(DEVICE)
