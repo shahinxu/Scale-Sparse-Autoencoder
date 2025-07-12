@@ -51,13 +51,6 @@ def trainSAE(
         )
 
     if log_steps is not None:
-        '''
-        wandb.init(
-            entity="sae-training",
-            project="sae-training",
-            config={f'{trainer.config["wandb_name"]}-{i}' : trainer.config for i, trainer in enumerate(trainers)}
-        )
-        '''
         # process save_dir in light of run name
         if save_dir is not None:
             save_dir = save_dir.format(run=wandb.run.name)
@@ -110,13 +103,6 @@ def trainSAE(
                         # L0
                         l0 = (f != 0).float().sum(dim=-1).mean().item()
 
-                        # fraction of variance explained
-                        # TODO: adapt for transcoder
-                        # total_variance = t.var(x, dim=0).sum()
-                        # residual_variance = t.var(x - x_hat, dim=0).sum()
-                        # frac_variance_explained = (1 - residual_variance / total_variance)
-                        # log[f'{trainer_name}/frac_variance_explained'] = frac_variance_explained.item()
-
                     # log parameters from training 
                     log.update({f'{trainer_name}/{k}' : v for k, v in losslog.items()})
                     log[f'{trainer_name}/l0'] = l0
@@ -124,15 +110,6 @@ def trainSAE(
                     for name, value in trainer_log.items():
                         log[f'{trainer_name}/{name}'] = value
 
-                    # TODO get this to work
-                    # metrics = evaluate(
-                    #     trainer.ae, 
-                    #     data, 
-                    #     device=trainer.device
-                    # )
-                    # log.update(
-                    #     {f'trainer{i}/{k}' : v for k, v in metrics.items()}
-                    # )
             wandb.log(log, step=step)
 
         # saving
@@ -156,9 +133,3 @@ def trainSAE(
     for save_dir, trainer in zip(save_dirs, trainers):
         if save_dir is not None:
             t.save(trainer.ae.state_dict(), os.path.join(save_dir, "ae.pt"))
-
-    # End the wandb run
-    '''
-    if log_steps is not None:
-        wandb.finish()
-    '''
