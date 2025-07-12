@@ -56,7 +56,7 @@ with open("metrics_log.jsonl", "a") as f:
             k=trainer_config['k'], experts=trainer_config['experts'],
             e=trainer_config['e'], heaviside=trainer_config['heaviside'], device=device
         )
-        metrics = evaluate(ae, buffer, device=device)
+        metrics = evaluate(ae, buffer, device=device, using_decompose=True)
         safe_config = {k: (str(v) if callable(v) or isinstance(v, type) else v) for k, v in trainer_config.items()}
         record = {"trainer_config": safe_config, "metrics": metrics}
         f.write(json.dumps(record, ensure_ascii=False, default=str) + "\n")
@@ -65,8 +65,8 @@ wandb.finish()
 
 # with open("metrics_log.jsonl", "a") as f:
 #     for i, trainer_config in enumerate(trainer_configs):
-#         ae = MultiExpertAutoEncoder(activation_dim=768, dict_size=32*768, k=32, experts=64, e=8, heaviside=False)
-#         ae.load_state_dict(t.load("/home/xuzhen/switch_sae/dictionaries/multi-encoder-decoder/8.pt"))
+#         ae = MultiExpertScaleAutoEncoder(activation_dim=768, dict_size=32*768, k=32, experts=64, e=8, heaviside=False)
+#         ae.load_state_dict(t.load("/home/xuzhen/switch_sae/dictionaries/MultiExpert_Scale_2/8.pt"))
 #         ae.to(device)
 #         metrics = evaluate(ae, buffer, device=device)
 #         safe_config = {k: (str(v) if callable(v) or isinstance(v, type) else v) for k, v in trainer_config.items()}

@@ -112,7 +112,7 @@ class MultiDecScaleAutoEncoder(nn.Module):
         x_hat = 0
         for expert_idx, (expert_top_acts, expert_local_indices) in enumerate(split_expert_data):
             decoder_matrix = self.expert_modules[expert_idx].decoder
-            decoder_matrix, _, _ = self.decompose_low_high(decoder_matrix, self.beta, "decoder", multi_expert=True)
+            decoder_matrix, _, _ = self.decompose_low_high(decoder_matrix, self.beta[expert_idx], "decoder")
             d = TritonDecoder.apply(expert_local_indices, expert_top_acts, decoder_matrix.mT)
             # d = TritonDecoder.apply(expert_local_indices, expert_top_acts, self.expert_modules[expert_idx].decoder.mT)
             x_hat = x_hat + d
@@ -140,55 +140,34 @@ class MultiDecScaleAutoEncoder(nn.Module):
             expert_local_indices = t.where(expert_mask, local_indices, t.tensor(padding_value_idx, device=device, dtype=top_indices.dtype))
             split_expert_data.append((expert_top_acts, expert_local_indices))
         return split_expert_data
-    
-    def decompose_low_high(self, M, scale: t.Tensor, position="decoder", multi_expert=False):
-        if not multi_expert:
-            dict_size = M.size(0)
-            activation_dim = M.size(1)
-            expert_dict_size = self.expert_dict_size
-            experts = self.experts
 
-            M_reshaped = M.view(experts, expert_dict_size, activation_dim)
-            scale_expanded = scale.view(experts, 1, 1)
+    def decompose_low_high(self, M: t.Tensor, scale: t.Tensor, position="decoder"):
+        dict_size = M.size(0)
+        activation_dim = M.size(1)
+        expert_dict_size = self.expert_dict_size
+        experts = dict_size // expert_dict_size
 
-            expert_avg = M_reshaped.mean(dim=1)
-            
-            if position == "decoder":
-                A_LP_base = self.lp_transform_decoder(expert_avg)
-            elif position == "encoder":
-                A_LP_base = self.lp_transform_encoder(expert_avg)
-            else:
-                raise ValueError(f"Unknown position: {position}")
-            A_LP = A_LP_base.unsqueeze(1).expand(-1, expert_dict_size, -1)
-            
-            A_HP = M_reshaped - A_LP
-            M_hat = A_LP + (scale_expanded + 1) * A_HP
-            
-            return (
-                M_hat.reshape(dict_size, activation_dim),
-                A_LP.reshape(dict_size, activation_dim),
-                A_HP.reshape(dict_size, activation_dim),
-            )
+        M_reshaped = M.view(experts, expert_dict_size, activation_dim)
+        scale_expanded = scale.view(experts, 1, 1)
+
+        expert_avg = M_reshaped.mean(dim=1)
+        if position == "decoder":
+            A_LP_base = self.lp_transform_decoder(expert_avg)
+        elif position == "encoder":
+            A_LP_base = self.lp_transform_encoder(expert_avg)
         else:
-            expert_avg = M.mean(dim=0)
-            if position == "decoder":
-                A_LP_base = self.lp_transform_decoder(expert_avg)
-            elif position == "encoder":
-                A_LP_base = self.lp_transform_encoder(expert_avg)
-            else:
-                raise ValueError(f"Unknown position: {position}")
-            A_LP = A_LP_base.unsqueeze(0).expand(self.expert_dict_size, -1)
-            
-            A_HP = M - A_LP
-            if scale.dim() > 0 and scale.size(0) > 1:
-                effective_scale = scale[0]
-            else:
-                effective_scale = scale
-                
-            M_hat = A_LP + (effective_scale + 1) * A_HP
-            
-            return (M_hat, A_LP, A_HP)
+            raise ValueError(f"Unknown position: {position}")
+        A_LP = A_LP_base.unsqueeze(1).expand(-1, expert_dict_size, -1)
         
+        A_HP = M_reshaped - A_LP
+        M_hat = A_LP + (scale_expanded + 1) * A_HP
+        
+        return (
+            M_hat.reshape(dict_size, activation_dim),
+            A_LP.reshape(dict_size, activation_dim),
+            A_HP.reshape(dict_size, activation_dim),
+        )
+    
     def forward(self, x, output_features=False):
         f = self.encode(x.view(-1, x.shape[-1]))
         top_acts, top_indices = f.topk(self.k, sorted=False)

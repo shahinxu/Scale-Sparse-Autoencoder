@@ -1,6 +1,6 @@
 #!/bin/bash
 
-BASE_ADVANCE_PATH="MultiDecoder"
+BASE_ADVANCE_PATH="MultiExpert_Scale"
 
 # 循环的次数
 NUM_RUNS=1

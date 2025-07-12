@@ -4,7 +4,7 @@ import torch.nn as nn
 from collections import namedtuple
 from ..kernels import TritonDecoder
 from .trainer import SAETrainer
-import torch.nn.init as init
+
 
 @t.no_grad()
 def geometric_median(points: t.Tensor, max_iter: int = 100, tol: float = 1e-5):
@@ -39,12 +39,21 @@ class Expert(nn.Module):
         super().__init__()
         self.encoder = nn.Linear(input_dim, output_dim)
         self.encoder.bias.data.zero_()
+        
+        self.decoder = nn.Parameter(self.encoder.weight.data.clone())
+        self.set_decoder_norm_to_unit_norm()
     
     def forward(self, x):
         z = nn.functional.relu(self.encoder(x))
-        return z
+        return self.decoder(z), z
+    
+    @t.no_grad()
+    def set_decoder_norm_to_unit_norm(self):
+        eps = t.finfo(self.decoder.dtype).eps
+        norm = t.norm(self.decoder.data, dim=0, keepdim=True)
+        self.decoder.data /= norm + eps
 
-class MultiEncScaleAutoEncoder(nn.Module):
+class MultiExpertAutoEncoder(nn.Module):
     def __init__(self, activation_dim, dict_size, k, experts, e, heaviside=False):
         super().__init__()
         self.activation_dim = activation_dim
@@ -59,25 +68,13 @@ class MultiEncScaleAutoEncoder(nn.Module):
             Expert(activation_dim, self.expert_dict_size) 
             for _ in range(experts)
         ])
-        self.decoder = nn.Parameter(t.empty(dict_size, activation_dim))
-        init.kaiming_uniform_(self.decoder, a=0, mode='fan_in', nonlinearity='relu')
-        self.set_decoder_norm_to_unit_norm()
-
+        
         self.gate = nn.Linear(activation_dim, experts)
         self.gate.bias.data.zero_()
         
         self.b_gate = nn.Parameter(t.zeros(activation_dim))
         self.b_dec = nn.Parameter(t.zeros(activation_dim))
 
-        self.omega = nn.Parameter(t.zeros(experts), requires_grad=True)
-        self.beta = nn.Parameter(t.zeros(experts), requires_grad=True)
-
-        self.lp_transform_decoder = t.nn.Linear(activation_dim, activation_dim, bias=False)
-        t.nn.init.eye_(self.lp_transform_decoder.weight)
-
-        self.lp_transform_encoder = t.nn.Linear(activation_dim, activation_dim, bias=False)
-        t.nn.init.eye_(self.lp_transform_encoder.weight)
-        
     def encode(self, x):
         gate_logits = self.gate(x - self.b_gate)
         gate_scores = t.softmax(gate_logits, dim=-1)
@@ -92,10 +89,9 @@ class MultiEncScaleAutoEncoder(nn.Module):
             expert_mask = t.softmax(sparse_weights, dim=-1)
         
         all_expert_outputs = []
-        for expert_idx, expert in enumerate(self.expert_modules):
-            encoder_M = expert.encoder.weight
-            M_hat, _, _ = self.decompose_low_high(encoder_M, self.omega[expert_idx], "encoder")
-            z_expert = nn.functional.relu(nn.functional.linear(x - self.b_dec, M_hat, expert.encoder.bias))
+        for expert in self.expert_modules:
+            z_expert = expert.encoder(x - self.b_dec)
+            z_expert = nn.functional.relu(z_expert)
             all_expert_outputs.append(z_expert)
         
         expert_stack = t.stack(all_expert_outputs, dim=0)
@@ -107,43 +103,43 @@ class MultiEncScaleAutoEncoder(nn.Module):
         f_total = weighted_experts.reshape(x.size(0), self.dict_size)
         return f_total
 
-    def decode(self, top_acts, top_indices):
-        d = TritonDecoder.apply(top_indices, top_acts, self.decoder.mT)
-        return d + self.b_dec
-
-    def decompose_low_high(self, M: t.Tensor, scale: t.Tensor, position="decoder"):
-        dict_size = M.size(0)
-        activation_dim = M.size(1)
-        expert_dict_size = self.expert_dict_size
-        experts = dict_size // expert_dict_size
-
-        M_reshaped = M.view(experts, expert_dict_size, activation_dim)
-        scale_expanded = scale.view(experts, 1, 1)
-
-        expert_avg = M_reshaped.mean(dim=1)
-        if position == "decoder":
-            A_LP_base = self.lp_transform_decoder(expert_avg)
-        elif position == "encoder":
-            A_LP_base = self.lp_transform_encoder(expert_avg)
-        else:
-            raise ValueError(f"Unknown position: {position}")
-        A_LP = A_LP_base.unsqueeze(1).expand(-1, expert_dict_size, -1)
-        
-        A_HP = M_reshaped - A_LP
-        M_hat = A_LP + (scale_expanded + 1) * A_HP
-        
-        return (
-            M_hat.reshape(dict_size, activation_dim),
-            A_LP.reshape(dict_size, activation_dim),
-            A_HP.reshape(dict_size, activation_dim),
+    def decode(self, top_values, top_indices):
+        split_expert_data = self.split_sparse_features_by_expert(
+            top_values, top_indices, self.experts, self.expert_dict_size
         )
-    
+        x_hat = 0
+        for expert_idx, (expert_top_acts, expert_local_indices) in enumerate(split_expert_data):
+            d = TritonDecoder.apply(expert_local_indices, expert_top_acts, self.expert_modules[expert_idx].decoder.mT)
+            x_hat = x_hat + d
 
+        return x_hat + self.b_dec
+    
+    def split_sparse_features_by_expert(
+        self,
+        top_acts: t.Tensor,
+        top_indices: t.Tensor,
+        num_experts: int,
+        expert_dict_size: int,
+        padding_value_idx: int = 0,
+        padding_value_act: float = 0.0
+    ) -> list[tuple[t.Tensor, t.Tensor]]:
+        device = top_acts.device
+        expert_ids = top_indices // expert_dict_size
+        local_indices = top_indices % expert_dict_size
+
+        split_expert_data = []
+
+        for expert_id in range(num_experts):
+            expert_mask = (expert_ids == expert_id)
+            expert_top_acts = t.where(expert_mask, top_acts, t.tensor(padding_value_act, device=device, dtype=top_acts.dtype))
+            expert_local_indices = t.where(expert_mask, local_indices, t.tensor(padding_value_idx, device=device, dtype=top_indices.dtype))
+            split_expert_data.append((expert_top_acts, expert_local_indices))
+        return split_expert_data
+    
     def forward(self, x, output_features=False):
         f = self.encode(x.view(-1, x.shape[-1]))
         top_acts, top_indices = f.topk(self.k, sorted=False)
         x_hat = self.decode(top_acts, top_indices).view(x.shape)
-        f = f.view(*x.shape[:-1], f.shape[-1])
 
         if not output_features:
             return x_hat
@@ -152,24 +148,25 @@ class MultiEncScaleAutoEncoder(nn.Module):
 
     @t.no_grad()
     def set_decoder_norm_to_unit_norm(self):
-        eps = t.finfo(self.decoder.dtype).eps
-        norm = t.norm(self.decoder.data, dim=1, keepdim=True)
-        self.decoder.data /= norm + eps
+        for expert in self.expert_modules:
+            expert.set_decoder_norm_to_unit_norm()
 
     @t.no_grad()
     def remove_gradient_parallel_to_decoder_directions(self):
-        assert self.decoder.grad is not None
+        for expert in self.expert_modules:
+            assert expert.decoder.grad is not None
+                
+            parallel_component = einops.einsum(
+                expert.decoder.grad,
+                expert.decoder.data,
+                "out_dim in_dim, out_dim in_dim -> out_dim",
+            )
 
-        parallel_component = einops.einsum(
-            self.decoder.grad,
-            self.decoder.data,
-            "d_sae d_in, d_sae d_in -> d_sae",
-        )
-        self.decoder.grad -= einops.einsum(
-            parallel_component,
-            self.decoder.data,
-            "d_sae, d_sae d_in -> d_sae d_in",
-        )
+            expert.decoder.grad -= einops.einsum(
+                parallel_component,
+                expert.decoder.data,
+                "out_dim, out_dim in_dim -> out_dim in_dim",
+            )
 
     def from_pretrained(path, k=100, experts=16, e=1, heaviside=False, device=None
                         , activation_dim=768, dict_size=32*768):
@@ -177,7 +174,7 @@ class MultiEncScaleAutoEncoder(nn.Module):
         Load a pretrained autoencoder from a file.
         """
         state_dict = t.load(path)
-        autoencoder = MultiEncScaleAutoEncoder(activation_dim, dict_size, k, experts, e, heaviside)
+        autoencoder = MultiExpertAutoEncoder(activation_dim, dict_size, k, experts, e, heaviside)
         autoencoder.load_state_dict(state_dict)
         if device is not None:
             autoencoder.to(device)
@@ -188,7 +185,7 @@ class MoETrainer(SAETrainer):
     MoE SAE training scheme.
     """
     def __init__(self,
-                 dict_class=MultiEncScaleAutoEncoder,
+                 dict_class=MultiExpertAutoEncoder,
                  activation_dim=512,
                  dict_size=64*512,
                  k=100,

@@ -248,54 +248,9 @@ def evaluate(
         decoder_matrix = t.cat(decoder_weights, dim=0)
     else:
         raise AttributeError("Dictionary must have 'decoders' or 'decoder' attribute.")
-    
-    if hasattr(dictionary, "encoder"):
-        if hasattr(dictionary.encoder, "weight"):
-            encoder_matrix = dictionary.encoder.weight
-        else:
-            encoder_matrix = dictionary.encoder
-    elif hasattr(dictionary, "expert_modules"):
-        encoder_weights = [expert.encoder.weight for expert in dictionary.expert_modules]
-        encoder_matrix = t.cat(encoder_weights, dim=0)
-    else:
-        raise AttributeError("Dictionary must have 'encoders' or 'encoder' attribute.")
-# --------------------------------------------------------------------------------------
-    # num_experts = dictionary.experts
-    # dict_size_per_expert = dictionary.dict_size // num_experts
-    # print(f"Number of experts: {num_experts}, Dictionary size: {dictionary.dict_size}")
-    # encoder_normed = encoder_matrix / encoder_matrix.norm(dim=1, keepdim=True)
-    # intra_sims = []
-    # inter_sims = []
-    # for i in range(num_experts):
-    #     start_i = i * dict_size_per_expert
-    #     end_i = (i + 1) * dict_size_per_expert
-    #     expert_enc = encoder_normed[start_i:end_i]
-    #     sim = expert_enc @ expert_enc.T
-    #     mask = ~t.eye(dict_size_per_expert, dtype=bool, device=sim.device)
-    #     intra_sims.append(sim[mask].mean().item())
-    #     for j in range(num_experts):
-    #         if i == j:
-    #             continue
-    #         start_j = j * dict_size_per_expert
-    #         end_j = (j + 1) * dict_size_per_expert
-    #         other_enc = encoder_normed[start_j:end_j]
-    #         sim_inter = expert_enc @ other_enc.T
-    #         inter_sims.append(sim_inter.mean().item())
-    # out["mean_intra_expert_similarity"] = sum(intra_sims) / len(intra_sims)
-    # out["mean_inter_expert_similarity"] = sum(inter_sims) / len(inter_sims)
-# --------------------------------------------------------------------------------------
-    encoder_normed = encoder_matrix / encoder_matrix.norm(dim=1, keepdim=True)
-    sim_matrix = encoder_normed @ encoder_matrix.T
-    sim_matrix.fill_diagonal_(-float("inf"))
-    max_sim = sim_matrix.max(dim=1).values
-    mean_max_sim = max_sim.mean().item()
-    out["mean_encoder_max_similarity"] = mean_max_sim
 
     if using_decompose:
-        decoder_matrix, _, _ = dictionary.decompose_low_high(
-            decoder_matrix, 
-            dictionary.beta, 
-            multi_expert=hasattr(dictionary, "decoder"))
+        decoder_matrix, _, _ = dictionary.decompose_low_high(decoder_matrix, dictionary.beta)
     decoder_normed = decoder_matrix / decoder_matrix.norm(dim=1, keepdim=True)
     sim_matrix = decoder_normed @ decoder_normed.T
     sim_matrix.fill_diagonal_(-float("inf"))

@@ -98,9 +98,9 @@ class MultiExpertScaleAutoEncoder(nn.Module):
             expert_mask = t.softmax(sparse_weights, dim=-1)
         
         all_expert_outputs = []
-        for expert in self.expert_modules:
+        for expert_idx, expert in enumerate(self.expert_modules):
             encoder_M = expert.encoder.weight
-            M_hat, _, _ = self.decompose_low_high(encoder_M, self.omega, "encoder")
+            M_hat, _, _ = self.decompose_low_high(encoder_M, self.omega[expert_idx], "encoder")
             z_expert = nn.functional.relu(nn.functional.linear(x - self.b_dec, M_hat, expert.encoder.bias))
             all_expert_outputs.append(z_expert)
         
@@ -120,7 +120,7 @@ class MultiExpertScaleAutoEncoder(nn.Module):
         x_hat = 0
         for expert_idx, (expert_top_acts, expert_local_indices) in enumerate(split_expert_data):
             # decoder_matrix = self.expert_modules[expert_idx].decoder
-            # decoder_matrix, _, _ = self.decompose_low_high(decoder_matrix, self.beta, "decoder")
+            # decoder_matrix, _, _ = self.decompose_low_high(decoder_matrix, self.beta[expert_idx], "decoder")
             # d = TritonDecoder.apply(expert_local_indices, expert_top_acts, decoder_matrix.mT)
             d = TritonDecoder.apply(expert_local_indices, expert_top_acts, self.expert_modules[expert_idx].decoder.mT)
             x_hat = x_hat + d
@@ -150,25 +150,31 @@ class MultiExpertScaleAutoEncoder(nn.Module):
         return split_expert_data
     
     def decompose_low_high(self, M: t.Tensor, scale: t.Tensor, position="decoder"):
-        expert_avg = M.mean(dim=0)
-        
+        dict_size = M.size(0)
+        activation_dim = M.size(1)
+        expert_dict_size = self.expert_dict_size
+        experts = dict_size // expert_dict_size
+
+        M_reshaped = M.view(experts, expert_dict_size, activation_dim)
+        scale_expanded = scale.view(experts, 1, 1)
+
+        expert_avg = M_reshaped.mean(dim=1)
         if position == "decoder":
             A_LP_base = self.lp_transform_decoder(expert_avg)
         elif position == "encoder":
             A_LP_base = self.lp_transform_encoder(expert_avg)
         else:
             raise ValueError(f"Unknown position: {position}")
-        A_LP = A_LP_base.unsqueeze(0).expand(self.expert_dict_size, -1)
+        A_LP = A_LP_base.unsqueeze(1).expand(-1, expert_dict_size, -1)
         
-        A_HP = M - A_LP
-        if scale.dim() > 0 and scale.size(0) > 1:
-            effective_scale = scale[0]
-        else:
-            effective_scale = scale
-            
-        M_hat = A_LP + (effective_scale + 1) * A_HP
+        A_HP = M_reshaped - A_LP
+        M_hat = A_LP + (scale_expanded + 1) * A_HP
         
-        return (M_hat, A_LP, A_HP)
+        return (
+            M_hat.reshape(dict_size, activation_dim),
+            A_LP.reshape(dict_size, activation_dim),
+            A_HP.reshape(dict_size, activation_dim),
+        )
     
     def forward(self, x, output_features=False):
         f = self.encode(x.view(-1, x.shape[-1]))
