@@ -44,7 +44,7 @@ class Expert(nn.Module):
         z = nn.functional.relu(self.encoder(x))
         return z
 
-class MultiEncAutoEncoder(nn.Module):
+class StepAutoEncoder(nn.Module):
     def __init__(self, activation_dim, dict_size, k, experts, e, heaviside=False):
         super().__init__()
         self.activation_dim = activation_dim
@@ -160,7 +160,7 @@ class MultiEncAutoEncoder(nn.Module):
         Load a pretrained autoencoder from a file.
         """
         state_dict = t.load(path)
-        autoencoder = MultiEncAutoEncoder(activation_dim, dict_size, k, experts, e, heaviside)
+        autoencoder = StepAutoEncoder(activation_dim, dict_size, k, experts, e, heaviside)
         autoencoder.load_state_dict(state_dict)
         if device is not None:
             autoencoder.to(device)
@@ -171,7 +171,7 @@ class MoETrainer(SAETrainer):
     MoE SAE training scheme.
     """
     def __init__(self,
-                 dict_class=MultiEncAutoEncoder,
+                 dict_class=StepAutoEncoder,
                  activation_dim=512,
                  dict_size=64*512,
                  k=100,
@@ -306,7 +306,8 @@ class MoETrainer(SAETrainer):
 
         # clip grad norm and remove grads parallel to decoder directions
         t.nn.utils.clip_grad_norm_(self.ae.parameters(), 1.0)
-        self.ae.remove_gradient_parallel_to_decoder_directions()
+        if self.ae.decoder.requires_grad:
+            self.ae.remove_gradient_parallel_to_decoder_directions()
 
         # do a training step
         self.optimizer.step()

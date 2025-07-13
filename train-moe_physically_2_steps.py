@@ -3,7 +3,7 @@ import torch as t
 from dictionary_learning import ActivationBuffer
 from dictionary_learning.training import trainSAE
 from dictionary_learning.utils import hf_dataset_to_generator, cfg_filename, str2bool
-from dictionary_learning.trainers.moe_physically import MultiExpertAutoEncoder, MoETrainer
+from dictionary_learning.trainers.moe_physically_2_steps import StepAutoEncoder, MoETrainer
 from dictionary_learning.evaluation import evaluate
 import wandb
 import argparse
@@ -29,7 +29,7 @@ buffer = ActivationBuffer(data, model, submodule, d_submodule=activation_dim, n_
 
 base_trainer_config = {
     'trainer' : MoETrainer,
-    'dict_class' : MultiExpertAutoEncoder,
+    'dict_class' : StepAutoEncoder,
     'activation_dim' : activation_dim,
     'dict_size' : args.dict_ratio * activation_dim,
     'auxk_alpha' : 1/32,
@@ -51,7 +51,7 @@ trainSAE(buffer, trainer_configs=trainer_configs, save_dir='dictionaries', log_s
 print("Training finished. Evaluating SAE...", flush=True)
 with open("metrics_log.jsonl", "a") as f:
     for i, trainer_config in enumerate(trainer_configs):
-        ae = MultiExpertAutoEncoder.from_pretrained(
+        ae = StepAutoEncoder.from_pretrained(
             f'dictionaries/{cfg_filename(trainer_config)}/ae.pt',
             k=trainer_config['k'], experts=trainer_config['experts'],
             e=trainer_config['e'], heaviside=trainer_config['heaviside'], device=device
@@ -65,7 +65,7 @@ wandb.finish()
 
 # with open("metrics_log.jsonl", "a") as f:
 #     for i, trainer_config in enumerate(trainer_configs):
-#         ae = MultiExpertAutoEncoder(activation_dim=768, dict_size=32*768, k=32, experts=64, e=8, heaviside=False)
+#         ae = MultiEncAutoEncoder(activation_dim=768, dict_size=32*768, k=32, experts=64, e=8, heaviside=False)
 #         ae.load_state_dict(t.load("/home/xuzhen/switch_sae/dictionaries/MultiExpert/8.pt"))
 #         ae.to(device)
 #         metrics = evaluate(ae, buffer, device=device)
