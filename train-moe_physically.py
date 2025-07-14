@@ -11,7 +11,7 @@ import itertools
 from config import lm, activation_dim, layer, hf, steps, n_ctxs
 import os
 import json
-# os.environ["WANDB_MODE"] = "disabled"
+os.environ["WANDB_MODE"] = "disabled"
 parser = argparse.ArgumentParser()
 parser.add_argument("--gpu", required=True)
 parser.add_argument('--dict_ratio', type=int, default=32)
