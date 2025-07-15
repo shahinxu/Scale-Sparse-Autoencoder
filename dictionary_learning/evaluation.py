@@ -178,8 +178,11 @@ def evaluate(
             raise StopIteration(
                 "Not enough activations in buffer. Pass a buffer with a smaller batch size or more data."
             )
+        print(f"Processing batch of shape {x.shape}")
         x_hat, f = dictionary(x, output_features=True)
         l2_loss = t.linalg.norm(x - x_hat, dim=-1).mean()
+        e = x - x_hat
+        recon_mse = e.pow(2).sum(dim=-1).mean()
         l1_loss = f.norm(p=1, dim=-1).mean()
         l0 = (f != 0).float().sum(dim=-1).mean()
         
@@ -208,6 +211,7 @@ def evaluate(
         relative_reconstruction_bias = x_hat_norm_squared.mean() / x_dot_x_hat.mean()
 
         out["l2_loss"] += l2_loss.item()
+        out["recon_mse"] += recon_mse.item()
         out["l1_loss"] += l1_loss.item()
         out["l0"] += l0.item()
         out["frac_variance_explained"] += frac_variance_explained.item()

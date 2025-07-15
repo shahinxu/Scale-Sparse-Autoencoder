@@ -53,7 +53,7 @@ class Expert(nn.Module):
         norm = t.norm(self.decoder.data, dim=0, keepdim=True)
         self.decoder.data /= norm + eps
 
-class MultiExpertScaleAutoEncoder(nn.Module):
+class MultiExpertDenoiseAutoEncoder(nn.Module):
     def __init__(self, activation_dim, dict_size, k, experts, e, heaviside=False):
         super().__init__()
         self.activation_dim = activation_dim
@@ -168,7 +168,7 @@ class MultiExpertScaleAutoEncoder(nn.Module):
         A_LP = A_LP_base.unsqueeze(1).expand(-1, expert_dict_size, -1)
         
         A_HP = M_reshaped - A_LP
-        M_hat = A_LP + (scale_expanded + 1) * A_HP
+        M_hat = A_HP
         
         return (
             M_hat.reshape(dict_size, activation_dim),
@@ -214,7 +214,7 @@ class MultiExpertScaleAutoEncoder(nn.Module):
         Load a pretrained autoencoder from a file.
         """
         state_dict = t.load(path)
-        autoencoder = MultiExpertScaleAutoEncoder(activation_dim, dict_size, k, experts, e, heaviside)
+        autoencoder = MultiExpertDenoiseAutoEncoder(activation_dim, dict_size, k, experts, e, heaviside)
         autoencoder.load_state_dict(state_dict)
         if device is not None:
             autoencoder.to(device)
@@ -225,7 +225,7 @@ class MoETrainer(SAETrainer):
     MoE SAE training scheme.
     """
     def __init__(self,
-                 dict_class=MultiExpertScaleAutoEncoder,
+                 dict_class=MultiExpertDenoiseAutoEncoder,
                  activation_dim=512,
                  dict_size=64*512,
                  k=100,
