@@ -21,31 +21,73 @@ def parse_training_log(log_file_path):
     
     return steps, l2_losses
 
-def plot_all_logs_comparison(save_path="./l2_loss_comparison.png"):
-    """
-    在同一张图中绘制所有 log 文件的 L2 loss 对比图
-    """
-    # 查找当前目录下所有的 .log 文件
-    log_files = glob.glob("*.log")
+def select_log_files():
+    all_log_files = glob.glob("*.log")
     
-    if not log_files:
+    if not all_log_files:
         print("未找到任何 .log 文件")
+        return []
+    
+    print(f"\n找到 {len(all_log_files)} 个日志文件:")
+    for i, log_file in enumerate(all_log_files, 1):
+        print(f"  {i}. {log_file}")
+    
+    print("\n请选择要处理的文件:")
+    print("1. 输入文件编号（用逗号分隔，如：1,3,5）")
+    print("2. 输入 'all' 处理所有文件")
+    print("3. 输入文件名模式（如：training_*）")
+    
+    choice = input("\n请输入选择: ").strip()
+    
+    selected_files = []
+    
+    if choice.lower() == 'all':
+        selected_files = all_log_files
+    elif ',' in choice or choice.isdigit():
+        try:
+            if ',' in choice:
+                indices = [int(x.strip()) - 1 for x in choice.split(',')]
+            else:
+                indices = [int(choice) - 1]
+            
+            for idx in indices:
+                if 0 <= idx < len(all_log_files):
+                    selected_files.append(all_log_files[idx])
+                else:
+                    print(f"警告: 编号 {idx + 1} 超出范围")
+        except ValueError:
+            print("错误: 请输入有效的编号")
+            return []
+    else:
+        pattern_files = glob.glob(choice)
+        if pattern_files:
+            selected_files = pattern_files
+        else:
+            print(f"未找到匹配模式 '{choice}' 的文件")
+            return []
+    
+    return selected_files
+
+def plot_selected_logs_comparison(selected_files, save_path="./l2_loss_comparison.png"):
+    if not selected_files:
+        print("没有选择任何文件")
         return
     
-    print(f"找到 {len(log_files)} 个日志文件:")
-    for log_file in log_files:
+    print(f"\n将处理以下 {len(selected_files)} 个文件:")
+    for log_file in selected_files:
         print(f"  - {log_file}")
     
-    plt.figure(figsize=(15, 10))
+    plt.rcParams.update({'font.size': 14})
     
-    # 定义颜色列表
+    plt.figure(figsize=(16, 12))
+    
     colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', 
               '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf',
               '#aec7e8', '#ffbb78', '#98df8a', '#ff9896', '#c5b0d5']
     
     valid_logs = 0
     
-    for i, log_file in enumerate(log_files):
+    for i, log_file in enumerate(selected_files):
         try:
             print(f"\n正在处理: {log_file}")
             steps, l2_losses = parse_training_log(log_file)
@@ -58,14 +100,11 @@ def plot_all_logs_comparison(save_path="./l2_loss_comparison.png"):
             print(f"  训练步数范围: {min(steps)} - {max(steps)}")
             print(f"  L2 Loss 范围: {min(l2_losses):.2e} - {max(l2_losses):.2e}")
             
-            # 生成标签（去掉扩展名和路径）
             label = os.path.splitext(os.path.basename(log_file))[0]
             
-            # 选择颜色
             color = colors[valid_logs % len(colors)]
             
-            # 绘制曲线，设置透明度为0.7
-            plt.plot(steps, l2_losses, linewidth=2, color=color, alpha=0.7, label=label)
+            plt.plot(steps, l2_losses, linewidth=3, color=color, alpha=0.7, label=label)
             
             valid_logs += 1
             
@@ -76,24 +115,21 @@ def plot_all_logs_comparison(save_path="./l2_loss_comparison.png"):
         print("没有找到有效的训练数据")
         return
     
-    # 设置图表属性
-    plt.title('L2 Loss Comparison - All Training Logs', fontsize=18, fontweight='bold', pad=20)
-    plt.xlabel('Training Steps', fontsize=14)
-    plt.ylabel('L2 Loss', fontsize=14)
+    plt.xlabel('Training Steps', fontsize=18, fontweight='bold')
+    plt.ylabel('Reconstruction MSE', fontsize=18, fontweight='bold')
     
-    # 设置网格
+    plt.xticks(fontsize=14)
+    plt.yticks(fontsize=14)
+    
     plt.grid(True, alpha=0.3, linestyle='--')
     
-    # 设置科学计数法
     plt.ticklabel_format(style='scientific', axis='y', scilimits=(0,0))
     
-    # 设置图例
-    plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left', fontsize=12)
+    plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left', fontsize=20, frameon=True, 
+               fancybox=True, shadow=True, framealpha=0.9)
     
-    # 调整布局
     plt.tight_layout()
     
-    # 保存图片
     if save_path:
         plt.savefig(save_path, dpi=300, bbox_inches='tight')
         print(f"\n对比图已保存到: {save_path}")
@@ -105,10 +141,18 @@ def plot_all_logs_comparison(save_path="./l2_loss_comparison.png"):
 
 def main():
     """
-    主函数：绘制所有日志文件的对比图
+    主函数：让用户选择文件并绘制对比图
     """
-    print("开始绘制所有日志文件的 L2 Loss 对比图...")
-    plot_all_logs_comparison()
+    print("开始绘制选定日志文件的 L2 Loss 对比图...")
+    
+    # 让用户选择文件
+    selected_files = select_log_files()
+    
+    if selected_files:
+        # 绘制选定文件的对比图
+        plot_selected_logs_comparison(selected_files)
+    else:
+        print("未选择任何文件，程序退出")
 
 if __name__ == "__main__":
     main()
