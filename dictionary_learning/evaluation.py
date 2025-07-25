@@ -178,7 +178,6 @@ def evaluate(
             raise StopIteration(
                 "Not enough activations in buffer. Pass a buffer with a smaller batch size or more data."
             )
-        print(f"Processing batch of shape {x.shape}")
         x_hat, f = dictionary(x, output_features=True)
         l2_loss = t.linalg.norm(x - x_hat, dim=-1).mean()
         e = x - x_hat
@@ -186,7 +185,7 @@ def evaluate(
         l1_loss = f.norm(p=1, dim=-1).mean()
         l0 = (f != 0).float().sum(dim=-1).mean()
         
-        features_BF = t.flatten(f, start_dim=0, end_dim=-2).to(dtype=t.float32) # If f is shape (B, L, D), flatten to (B*L, D)
+        features_BF = t.flatten(f, start_dim=0, end_dim=-2).to(dtype=t.float32)
         assert features_BF.shape[-1] == dictionary.dict_size
         assert len(features_BF.shape) == 2
 
