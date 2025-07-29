@@ -4,12 +4,15 @@ import io
 import json
 import argparse
 
-def hf_dataset_to_generator(dataset_name, split='train', streaming=True, max_length=20):
+def hf_dataset_to_generator(dataset_name, split='train', streaming=True, max_length=20, is_test=False, data=None):
     from transformers import AutoTokenizer
     from config import lm
 
     tokenizer = AutoTokenizer.from_pretrained(lm)
-    dataset = load_dataset(dataset_name, split=split, streaming=streaming)
+    if is_test:
+        dataset = load_dataset(dataset_name, data, split=split, streaming=streaming)
+    else:
+        dataset = load_dataset(dataset_name, split=split, streaming=streaming)
     
     def gen():
         for x in iter(dataset):

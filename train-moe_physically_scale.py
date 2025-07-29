@@ -8,7 +8,7 @@ from dictionary_learning.evaluation import evaluate
 import wandb
 import argparse
 import itertools
-from config import lm, activation_dim, layer, hf, steps, n_ctxs
+from config import lm, activation_dim, layer, hf, hf_test, steps, n_ctxs
 import os
 import json
 os.environ["WANDB_MODE"] = "disabled"
@@ -44,32 +44,34 @@ base_trainer_config = {
 
 trainer_configs = [(base_trainer_config | {'k': combo[0], 'experts': combo[1], 'e': combo[2], 'heaviside': combo[3]}) for combo in itertools.product(args.ks, args.num_experts, args.es, args.heavisides)]
 
-wandb.init(entity="amudide", project="MoE", config={f'{trainer_config["wandb_name"]}-{i}' : trainer_config for i, trainer_config in enumerate(trainer_configs)})
+# wandb.init(entity="amudide", project="MoE", config={f'{trainer_config["wandb_name"]}-{i}' : trainer_config for i, trainer_config in enumerate(trainer_configs)})
 
-trainSAE(buffer, trainer_configs=trainer_configs, save_dir='dictionaries', log_steps=1, steps=steps)
+# trainSAE(buffer, trainer_configs=trainer_configs, save_dir='dictionaries', log_steps=1, steps=steps)
 
-print("Training finished. Evaluating SAE...", flush=True)
-with open("metrics_log.jsonl", "a") as f:
-    for i, trainer_config in enumerate(trainer_configs):
-        ae = MultiExpertScaleAutoEncoder.from_pretrained(
-            f'dictionaries/{cfg_filename(trainer_config)}/ae.pt',
-            k=trainer_config['k'], experts=trainer_config['experts'],
-            e=trainer_config['e'], heaviside=trainer_config['heaviside'], device=device
-        )
-        metrics = evaluate(ae, buffer, device=device, using_decompose=True)
-        safe_config = {k: (str(v) if callable(v) or isinstance(v, type) else v) for k, v in trainer_config.items()}
-        record = {"trainer_config": safe_config, "metrics": metrics}
-        f.write(json.dumps(record, ensure_ascii=False, default=str) + "\n")
-        print(record)
-wandb.finish()
-
+# print("Training finished. Evaluating SAE...", flush=True)
 # with open("metrics_log.jsonl", "a") as f:
 #     for i, trainer_config in enumerate(trainer_configs):
-#         ae = MultiExpertScaleAutoEncoder(activation_dim=768, dict_size=32*768, k=32, experts=64, e=8, heaviside=False)
-#         ae.load_state_dict(t.load("/home/xuzhen/switch_sae/dictionaries/MultiExpert_Scale_64_8/8.pt"))
-#         ae.to(device)
-#         metrics = evaluate(ae, buffer, device=device)
+#         ae = MultiExpertScaleAutoEncoder.from_pretrained(
+#             f'dictionaries/{cfg_filename(trainer_config)}/ae.pt',
+#             k=trainer_config['k'], experts=trainer_config['experts'],
+#             e=trainer_config['e'], heaviside=trainer_config['heaviside'], device=device
+#         )
+#         metrics = evaluate(ae, buffer, device=device, using_decompose=True)
 #         safe_config = {k: (str(v) if callable(v) or isinstance(v, type) else v) for k, v in trainer_config.items()}
 #         record = {"trainer_config": safe_config, "metrics": metrics}
 #         f.write(json.dumps(record, ensure_ascii=False, default=str) + "\n")
 #         print(record)
+# wandb.finish()
+
+test_data = hf_dataset_to_generator(hf_test, is_test=True, data='wikitext-103-raw-v1')
+test_buffer = ActivationBuffer(test_data, model, submodule, d_submodule=activation_dim, n_ctxs=n_ctxs, device=device)
+with open("metrics_log.jsonl", "a") as f:
+    for i, trainer_config in enumerate(trainer_configs):
+        ae = MultiExpertScaleAutoEncoder(activation_dim=768, dict_size=32*768, k=32, experts=64, e=8, heaviside=False)
+        ae.load_state_dict(t.load("/home/xuzhen/switch_sae/dictionaries/MultiExpert_Scale_64_8/8.pt"))
+        ae.to(device)
+        metrics = evaluate(ae, test_buffer, device=device)
+        safe_config = {k: (str(v) if callable(v) or isinstance(v, type) else v) for k, v in trainer_config.items()}
+        record = {"trainer_config": safe_config, "metrics": metrics}
+        f.write(json.dumps(record, ensure_ascii=False, default=str) + "\n")
+        print(record)

@@ -327,11 +327,29 @@ def main():
     submodule = model.transformer.h[layer]
     
     custom_texts = [
-        # "Climate change is one of the most pressing challenges of our time.",
-        # "Climate refers to the long-term stable meteorological conditions.",
-        # "The noun climate refers to the long-term stable meteorological conditions.",
-        "Climate Climate Climate Climate Climate Climate Repeat Climate",
-        "Wrong Wrong Wrong Wrong Wrong Wrong Wrong Wrong Wrong Wrong Wrong",
+        # 1. 语义渐变测试 - 从具体到抽象
+        "The red apple tastes sweet and delicious for breakfast today.",
+        
+        # 2. 重复模式测试 - 测试专家专门化
+        "Python Python Python Python Python programming language Python",
+        
+        # 3. 语法结构测试 - 测试句法专家
+        "Although the weather was terrible, we decided to go hiking anyway.",
+        
+        # 4. 数字和逻辑测试 - 测试数值专家
+        "The equation 2 + 3 = 5 is a simple mathematical fact.",
+        
+        # 5. 情感极性测试 - 测试情感专家激活
+        "I absolutely love this wonderful beautiful amazing fantastic day!",
+        
+        # 6. 技术词汇测试 - 测试专业领域专家
+        "Neural networks use backpropagation algorithms for gradient descent optimization.",
+        
+        # 7. 时间和因果测试 - 测试时序专家
+        "First we prepare ingredients, then cook the meal, finally we eat.",
+        
+        # 8. 否定和对比测试 - 测试对比逻辑专家
+        "This is not wrong but rather completely right and absolutely correct."
     ]
     
     data = create_custom_data_generator(custom_texts)
