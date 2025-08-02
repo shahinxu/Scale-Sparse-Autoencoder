@@ -1,6 +1,6 @@
 import torch as t
 from nnsight import LanguageModel
-from dictionary_learning import ActivationBuffer
+from dictionary_learning.test_buffer import ActivationBuffer
 from dictionary_learning.trainers.moe_physically import MultiExpertAutoEncoder
 import json
 import matplotlib.pyplot as plt
@@ -361,7 +361,8 @@ def main():
         submodule, 
         d_submodule=activation_dim, 
         n_ctxs=n_ctxs, 
-        device=device
+        device=device,
+        sequential=True
     )
     
     print(f"Loading SAE from {MODEL_PATH}...")
