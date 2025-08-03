@@ -193,3 +193,7 @@ gpt2
 openwebtext
 
 Llama-3.1
+
+expert_feature_analysis_*
+
+sae_analysis_results_*
