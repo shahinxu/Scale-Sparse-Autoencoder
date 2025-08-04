@@ -1,7 +1,7 @@
 import torch as t
 from nnsight import LanguageModel
 from dictionary_learning.test_buffer import ActivationBuffer
-from dictionary_learning.trainers.moe_logically import MoeAutoEncoder
+from dictionary_learning.trainers.moe_physically import MultiExpertAutoEncoder
 import matplotlib.pyplot as plt
 import numpy as np
 from transformers import AutoTokenizer
@@ -10,8 +10,8 @@ from collections import defaultdict
 import os
 import re
 
-GPU = "5"
-MODEL = "MoE"
+GPU = "0"
+MODEL = "MultiExpert_64_2"
 LAYER = 8
 MODEL_PATH = f"/home/xuzhen/switch_sae/dictionaries/{MODEL}/{LAYER}.pt"
 OUTPUT_ROOT = f"sae_analysis_results_{MODEL}_{LAYER}"
@@ -345,12 +345,12 @@ def main():
     )
     
     print(f"Loading SAE from {MODEL_PATH}...")
-    ae = MoeAutoEncoder(
+    ae = MultiExpertAutoEncoder(
         activation_dim=768,
         dict_size=32*768,
         k=32,
         experts=64,
-        e=8,
+        e=2,
         heaviside=False
     )
     ae.load_state_dict(t.load(MODEL_PATH))

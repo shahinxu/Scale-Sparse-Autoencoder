@@ -299,21 +299,23 @@ class MoETrainer(SAETrainer):
 
         h = self.ae.gate(x - self.ae.b_gate)
         p = t.nn.functional.softmax(h, dim=-1)
-
-        flb = t.argmax(p, dim=1)
-        flb = t.nn.functional.one_hot(flb, num_classes=self.experts).float()
+        
+        topk_probs, topk_indices = p.topk(self.e, dim=-1)
+        
+        flb = t.zeros_like(p)
+        flb.scatter_(1, topk_indices, topk_probs)
         flb = flb.mean(dim=0)
-
+        
         P = p.mean(dim=0)
-
+        
         lb_loss = self.experts * t.dot(flb, P)
-
+        
         lb_loss_weight = 3
         
         l2_loss = e.pow(2).sum(dim=-1).mean()
         auxk_loss = auxk_loss.sum(dim=-1).mean()
 
-        loss = l2_loss + lb_loss_weight * lb_loss * self.activation_dim 
+        loss = l2_loss + lb_loss_weight * lb_loss * self.activation_dim
 
         if not logging:
             return loss
