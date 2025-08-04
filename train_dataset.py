@@ -3,166 +3,81 @@ from nnsight import LanguageModel
 from dictionary_learning.test_buffer import ActivationBuffer
 from dictionary_learning.trainers.moe_physically import MultiExpertAutoEncoder
 import json
-import matplotlib.pyplot as plt
 from transformers import AutoTokenizer
 from config import lm, activation_dim, layer, n_ctxs
 from collections import defaultdict
 import os
-import re
+import pandas as pd
 
-GPU = "0"
+GPU = "5"
 MODEL = "MultiExpert_64_8"
-MODEL_PATH = f"/home/xuzhen/switch_sae/dictionaries/{MODEL}/8.pt"
-OUTPUT_ROOT = f"expert_feature_analysis_{MODEL}_synthetic"
+MODEL_PATH = f"/home/xuzhen/switch_sae/dictionaries/{MODEL}/2.pt"
+OUTPUT_ROOT = f"expert_feature_analysis_{MODEL}_wikitext"
 
-TARGET_EXPERTS = [0, 1]  # 只分析前两个expert
+WIKITEXT_PATH = "/home/xuzhen/switch_sae/wikitext"
+WIKITEXT_VERSION = "wikitext-2-raw-v1"
+SPLIT = "train"
+
+BATCH_SIZE = 200
+TOTAL_BATCHES = 10
+TARGET_EXPERTS = [0, 1]
 
 
-def generate_synthetic_sentences():
-    """生成100个测试句子"""
-    sentences = [
-        # 基础语法结构
-        "The cat sat on the mat.",
-        "She walked to the store yesterday.",
-        "They are playing football in the park.",
-        "I will go to school tomorrow.",
-        "He has been working here for five years.",
-        
-        # 复合词和专有名词
-        "The Ardhanarishvara sculpture is beautiful.",
-        "McDonald's restaurant serves hamburgers.",
-        "Spider-Man is a popular superhero.",
-        "New York City has many skyscrapers.",
-        "Twenty-first century technology is advancing rapidly.",
-        
-        # 数字和日期
-        "The meeting is scheduled for 3:30 PM.",
-        "She was born on January 15, 1990.",
-        "The temperature reached 25 degrees Celsius.",
-        "Chapter 11 discusses important concepts.",
-        "The company earned $2.5 million last year.",
-        
-        # 标点符号和特殊字符
-        "Wait... what did you say?",
-        "The email address is user@example.com.",
-        "Use Ctrl+C to copy the text.",
-        "The ratio is 3:1 in favor of the team.",
-        "She said, 'Hello, how are you?'",
-        
-        # 科学和技术术语
-        "DNA contains genetic information.",
-        "The algorithm processes data efficiently.",
-        "Photosynthesis occurs in plant leaves.",
-        "Machine learning requires large datasets.",
-        "The HTTP protocol enables web communication.",
-        
-        # 文学和艺术
-        "Shakespeare wrote many famous plays.",
-        "The Mona Lisa is displayed in the Louvre.",
-        "Jazz music originated in New Orleans.",
-        "Impressionist painters used vibrant colors.",
-        "The novel explores themes of love and loss.",
-        
-        # 历史和地理
-        "World War II ended in 1945.",
-        "The Amazon rainforest spans multiple countries.",
-        "Ancient Rome had a powerful military.",
-        "Mount Everest is the highest peak.",
-        "The Silk Road connected East and West.",
-        
-        # 动物和自然
-        "Lions live in the African savanna.",
-        "Dolphins are intelligent marine mammals.",
-        "Earthquakes occur along tectonic plates.",
-        "Rainbows appear after storms.",
-        "Butterflies undergo metamorphosis.",
-        
-        # 食物和文化
-        "Italian cuisine features pasta and pizza.",
-        "Sushi is a traditional Japanese dish.",
-        "Thanksgiving is celebrated in November.",
-        "Coffee beans are grown in tropical regions.",
-        "Chocolate comes from cacao trees.",
-        
-        # 运动和娱乐
-        "The Olympics occur every four years.",
-        "Basketball players need good coordination.",
-        "Movies are shown in theaters worldwide.",
-        "Video games have become increasingly popular.",
-        "Musicians perform concerts for audiences.",
-        
-        # 职业和工作
-        "Doctors diagnose and treat patients.",
-        "Engineers design bridges and buildings.",
-        "Teachers educate students in schools.",
-        "Farmers grow crops to feed people.",
-        "Artists create beautiful works of art.",
-        
-        # 复杂句子结构
-        "Although it was raining, they decided to go hiking.",
-        "The book, which was published last year, became a bestseller.",
-        "Neither the students nor the teacher understood the problem.",
-        "If you study hard, you will pass the exam.",
-        "The more you practice, the better you become.",
-        
-        # 抽象概念
-        "Freedom is a fundamental human right.",
-        "Love conquers all obstacles in life.",
-        "Knowledge is power in modern society.",
-        "Time heals all wounds eventually.",
-        "Beauty lies in the eye of the beholder.",
-        
-        # 技术和创新
-        "Artificial intelligence is transforming industries.",
-        "Smartphones connect people around the world.",
-        "Solar panels convert sunlight into electricity.",
-        "3D printing creates objects from digital designs.",
-        "Virtual reality provides immersive experiences.",
-        
-        # 教育和学习
-        "Students learn through reading and practice.",
-        "Universities offer degrees in various fields.",
-        "Online courses provide flexible learning options.",
-        "Research contributes to scientific knowledge.",
-        "Libraries preserve books and information.",
-        
-        # 健康和医学
-        "Exercise improves physical and mental health.",
-        "Vaccines prevent dangerous diseases.",
-        "Healthy eating includes fruits and vegetables.",
-        "Sleep is essential for brain function.",
-        "Medical research saves countless lives.",
-        
-        # 环境和生态
-        "Climate change affects global weather patterns.",
-        "Recycling reduces waste and pollution.",
-        "Forests provide oxygen and habitats.",
-        "Renewable energy sources are sustainable.",
-        "Conservation protects endangered species.",
-        
-        # 商业和经济
-        "Companies compete for market share.",
-        "Investments can generate returns over time.",
-        "Supply and demand determine prices.",
-        "Innovation drives economic growth.",
-        "Trade connects countries and cultures.",
-        
-        # 社会和政治
-        "Democracy allows citizens to vote.",
-        "Laws maintain order in society.",
-        "Human rights protect individual freedoms.",
-        "Communities work together for common goals.",
-        "Leadership requires vision and integrity.",
-        
-        # 混合复杂句子
-        "The quick brown fox jumps over the lazy dog.",
-        "Anti-establishment protesters gathered in downtown Manhattan.",
-        "Twenty-first-century nano-technology revolutionizes medicine.",
-        "Self-driving cars use AI-powered computer vision systems.",
-        "Multi-billion-dollar corporations influence global markets.",
-    ]
+def load_wikitext_batch(wikitext_path, version="wikitext-2-raw-v1", split="train", 
+                       batch_size=200, batch_idx=0, min_length=20, max_length=200):
+    """批次加载WikiText数据集"""
     
-    return sentences[:100]  # 确保只返回100个句子
+    dataset_path = os.path.join(wikitext_path, version)
+    parquet_files = []
+    
+    if os.path.exists(dataset_path):
+        all_files = os.listdir(dataset_path)
+        parquet_files = [f for f in all_files if f.startswith(f"{split}-") and f.endswith(".parquet")]
+        parquet_files.sort()
+    
+    if not parquet_files:
+        raise FileNotFoundError(f"No parquet files found for {split} split in {dataset_path}")
+    
+    print(f"Loading batch {batch_idx} (size: {batch_size})")
+    
+    all_texts = []
+    texts_read = 0
+    start_idx = batch_idx * batch_size
+    end_idx = start_idx + batch_size
+    
+    for parquet_file in parquet_files:
+        full_path = os.path.join(dataset_path, parquet_file)
+        df = pd.read_parquet(full_path)
+        
+        for _, row in df.iterrows():
+            text = row['text'].strip()
+            
+            if len(text) < min_length:
+                continue
+            if len(text) > max_length:
+                text = text[:max_length]
+            if text.startswith('=') and text.endswith('='):
+                continue
+            if not text or text.isspace():
+                continue
+            if len(text.split()) < 3:
+                continue
+            
+            if texts_read < start_idx:
+                texts_read += 1
+                continue
+                
+            if texts_read < end_idx:
+                all_texts.append(text)
+                texts_read += 1
+            else:
+                break
+        
+        if len(all_texts) >= batch_size:
+            break
+    
+    print(f"  Loaded {len(all_texts)} texts for batch {batch_idx}")
+    return all_texts
 
 
 class ExpertFeatureCollector:
@@ -189,6 +104,7 @@ class ExpertFeatureCollector:
         })
         
         self.total_texts_processed = 0
+        self.total_batches_processed = 0
     
     def add_feature_activation(self, expert_id, feature_id, token_text, activation_strength, 
                              text_id, token_pos, original_text):
@@ -197,6 +113,8 @@ class ExpertFeatureCollector:
         if expert_id not in self.target_experts:
             return
         
+        global_text_id = self.total_texts_processed + text_id
+        
         # 计算相对feature ID (在该expert内的ID)
         relative_feature_id = feature_id % self.expert_dict_size
         
@@ -204,9 +122,9 @@ class ExpertFeatureCollector:
         token_record = {
             'token': token_text,
             'strength': activation_strength,
-            'text_id': text_id,
+            'text_id': global_text_id,
             'token_pos': token_pos,
-            'original_text': original_text
+            'original_text': original_text[:100] + '...' if len(original_text) > 100 else original_text
         }
         
         self.expert_feature_tokens[expert_id][relative_feature_id].append(token_record)
@@ -222,12 +140,13 @@ class ExpertFeatureCollector:
         # 更新feature计数（只计算已激活的feature）
         self.expert_stats[expert_id]['total_features_activated'] = len(self.expert_feature_tokens[expert_id])
     
-    def update_stats(self, total_texts):
-        """更新统计信息"""
-        self.total_texts_processed = total_texts
+    def update_batch_stats(self, batch_size):
+        """更新批次统计信息"""
+        self.total_texts_processed += batch_size
+        self.total_batches_processed += 1
         
         for expert_id in self.target_experts:
-            self.expert_stats[expert_id]['texts_processed'] = total_texts
+            self.expert_stats[expert_id]['texts_processed'] = self.total_texts_processed
     
     def get_expert_feature_summary(self, expert_id, top_n=20):
         """获取指定expert的feature摘要"""
@@ -275,14 +194,17 @@ class ExpertFeatureCollector:
         global_stats = {
             'target_experts': list(self.target_experts),
             'total_texts_processed': self.total_texts_processed,
+            'total_batches_processed': self.total_batches_processed,
             'expert_feature_counts': {
                 expert_id: len(self.expert_feature_tokens[expert_id]) 
                 for expert_id in self.target_experts
             },
             'dataset_info': {
-                'source': 'Synthetic Sentences',
-                'total_sentences': 100,
-                'description': 'Hand-crafted sentences for SAE analysis'
+                'source': 'WikiText',
+                'version': WIKITEXT_VERSION,
+                'split': SPLIT,
+                'batch_size': BATCH_SIZE,
+                'total_batches': TOTAL_BATCHES
             }
         }
         
@@ -316,7 +238,7 @@ class ExpertFeatureCollector:
             expert_id = summary['expert_id']
             stats = summary['statistics']
             
-            f.write(f"Expert {expert_id} - Feature Analysis Report (Synthetic Data)\n")
+            f.write(f"Expert {expert_id} - Feature Analysis Report (WikiText)\n")
             f.write("="*70 + "\n\n")
             
             f.write("📊 Statistics:\n")
@@ -378,11 +300,12 @@ class ExpertFeatureCollector:
 
 
 @t.no_grad()
-def analyze_synthetic_sentences(dictionary, model, submodule, device, sentences, collector):
-    """分析合成句子，收集target experts的feature激活信息"""
+def analyze_batch(dictionary, model, submodule, device, texts, batch_idx, collector):
+    """分析一个批次的文本，收集target experts的feature激活信息"""
     
     print(f"\n{'='*60}")
-    print(f"Processing {len(sentences)} synthetic sentences")
+    print(f"Processing Batch {batch_idx + 1}/{TOTAL_BATCHES}")
+    print(f"Batch size: {len(texts)} texts")
     print(f"Target experts: {TARGET_EXPERTS}")
     print(f"{'='*60}")
     
@@ -390,33 +313,35 @@ def analyze_synthetic_sentences(dictionary, model, submodule, device, sentences,
     
     def gen():
         while True:
-            for sentence in sentences:
-                yield sentence
+            for text in texts:
+                input_ids = tokenizer.encode(text, truncation=True, max_length=128)
+                processed_text = tokenizer.decode(input_ids, skip_special_tokens=True)
+                yield processed_text
     
     buffer = ActivationBuffer(
         gen(), 
         model, 
         submodule, 
         d_submodule=activation_dim, 
-        n_ctxs=min(n_ctxs, len(sentences) * 50),  # 每个句子平均50个token
+        n_ctxs=min(n_ctxs, len(texts) * 150),
         device=device,
         sequential=True
     )
     
-    sentence_feature_activations = defaultdict(int)
+    batch_feature_activations = defaultdict(int)
     
-    for text_id, sentence in enumerate(sentences):
+    for text_id, text in enumerate(texts):
         try:
             x = next(buffer).to(device)
         except StopIteration:
-            print(f"Warning: Not enough activations for sentence {text_id}")
+            print(f"Warning: Not enough activations for text {text_id}")
             break
         
-        input_ids = tokenizer.encode(sentence, truncation=True, max_length=128)
+        input_ids = tokenizer.encode(text, truncation=True, max_length=128)
         tokens = [tokenizer.decode([token_id]) for token_id in input_ids]
         
-        if text_id % 10 == 0:
-            print(f"  Processing sentence {text_id}/{len(sentences)}: '{sentence[:60]}...'")
+        if text_id % 50 == 0:
+            print(f"  Processing text {text_id}/{len(texts)}: '{text[:50]}...'")
         
         for token_pos in range(min(len(x), len(tokens))):
             token_activation = x[token_pos]
@@ -443,15 +368,15 @@ def analyze_synthetic_sentences(dictionary, model, submodule, device, sentences,
                             activation_strength=fval.item(),
                             text_id=text_id,
                             token_pos=token_pos,
-                            original_text=sentence
+                            original_text=text
                         )
-                        sentence_feature_activations[expert_id] += 1
+                        batch_feature_activations[expert_id] += 1
     
-    collector.update_stats(len(sentences))
+    collector.update_batch_stats(len(texts))
     
-    print(f"  Analysis completed:")
+    print(f"  Batch {batch_idx + 1} completed:")
     for expert_id in TARGET_EXPERTS:
-        activations = sentence_feature_activations.get(expert_id, 0)
+        activations = batch_feature_activations.get(expert_id, 0)
         total_features = len(collector.expert_feature_tokens[expert_id])
         print(f"    Expert {expert_id}: {activations} activations, {total_features} features")
     
@@ -462,19 +387,14 @@ def analyze_synthetic_sentences(dictionary, model, submodule, device, sentences,
 def main():
     device = f'cuda:{GPU}'
     
-    print(f"Expert Feature Analysis Configuration (Synthetic Data):")
+    print(f"Expert Feature Analysis Configuration:")
+    print(f"  Dataset: {WIKITEXT_VERSION}")
+    print(f"  Split: {SPLIT}")
     print(f"  Model: {MODEL}")
     print(f"  Device: {device}")
     print(f"  Target Experts: {TARGET_EXPERTS}")
-    print(f"  Synthetic sentences: 100")
-    
-    # 生成测试句子
-    sentences = generate_synthetic_sentences()
-    print(f"\n📝 Generated {len(sentences)} synthetic sentences")
-    print("Sample sentences:")
-    for i, sentence in enumerate(sentences[:5], 1):
-        print(f"  {i}. {sentence}")
-    print("  ...")
+    print(f"  Batch processing: {BATCH_SIZE} texts per batch, {TOTAL_BATCHES} batches")
+    print(f"  Total texts to process: {BATCH_SIZE * TOTAL_BATCHES}")
     
     print("\nLoading language model...")
     model = LanguageModel(lm, dispatch=True, device_map=device)
@@ -484,7 +404,7 @@ def main():
     ae = MultiExpertAutoEncoder(
         activation_dim=768, 
         dict_size=32*768, 
-        k=32, 
+        k=4, 
         experts=64, 
         e=8, 
         heaviside=False
@@ -499,21 +419,43 @@ def main():
         expert_dict_size=ae.expert_dict_size
     )
     
-    # 分析合成句子
-    try:
-        analyze_synthetic_sentences(ae, model, submodule, device, sentences, collector)
-    except Exception as e:
-        print(f"Error during analysis: {e}")
-        return
+    # 批次处理
+    for batch_idx in range(TOTAL_BATCHES):
+        try:
+            # 加载当前批次的数据
+            batch_texts = load_wikitext_batch(
+                wikitext_path=WIKITEXT_PATH,
+                version=WIKITEXT_VERSION,
+                split=SPLIT,
+                batch_size=BATCH_SIZE,
+                batch_idx=batch_idx
+            )
+            
+            if not batch_texts:
+                print(f"No more texts available at batch {batch_idx}")
+                break
+            
+            # 分析当前批次
+            analyze_batch(ae, model, submodule, device, batch_texts, batch_idx, collector)
+            
+            # 每处理几个批次保存一次中间结果
+            if (batch_idx + 1) % 2 == 0:
+                print(f"\nSaving intermediate results after batch {batch_idx + 1}...")
+                collector.save_expert_feature_analysis(OUTPUT_ROOT)
+            
+        except Exception as e:
+            print(f"Error processing batch {batch_idx}: {e}")
+            continue
     
-    # 保存结果
-    print(f"\nSaving expert feature analysis results...")
+    # 最终保存
+    print(f"\nSaving final expert feature analysis results...")
     collector.save_expert_feature_analysis(OUTPUT_ROOT)
     
     # 最终统计
     print(f"\n✅ Expert Feature Analysis Complete!")
     print(f"📊 Final Statistics:")
-    print(f"  Total sentences processed: {collector.total_texts_processed}")
+    print(f"  Total texts processed: {collector.total_texts_processed}")
+    print(f"  Total batches processed: {collector.total_batches_processed}")
     
     for expert_id in TARGET_EXPERTS:
         if expert_id in collector.expert_feature_tokens:

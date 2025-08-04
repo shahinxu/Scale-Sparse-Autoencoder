@@ -1,8 +1,7 @@
 import torch as t
 from nnsight import LanguageModel
 from dictionary_learning.test_buffer import ActivationBuffer
-from dictionary_learning.trainers.moe_physically import MultiExpertAutoEncoder
-import json
+from dictionary_learning.trainers.moe_logically import MoeAutoEncoder
 import matplotlib.pyplot as plt
 import numpy as np
 from transformers import AutoTokenizer
@@ -11,11 +10,12 @@ from collections import defaultdict
 import os
 import re
 
-GPU = "0"
-MODEL = "MultiExpert_64_1"
-MODEL_PATH = f"/home/xuzhen/switch_sae/dictionaries/{MODEL}/8.pt"
-OUTPUT_ROOT = f"sae_analysis_results_{MODEL}"
-
+GPU = "5"
+MODEL = "MoE"
+LAYER = 8
+MODEL_PATH = f"/home/xuzhen/switch_sae/dictionaries/{MODEL}/{LAYER}.pt"
+OUTPUT_ROOT = f"sae_analysis_results_{MODEL}_{LAYER}"
+k = 32
 
 def sanitize_filename(text):
     """Clean filename by removing unsafe characters"""
@@ -118,7 +118,7 @@ def analyze_specified_tokens(
             token_features = f[0]
             
             # Get top-k (32) activations from f
-            top_k_values, top_k_indices = token_features.topk(dictionary.k, sorted=True)
+            top_k_values, top_k_indices = token_features.topk(k, sorted=True)
             
             # Calculate reconstruction error
             recon_error = t.linalg.norm(token_activation - token_reconstructed).item()
@@ -327,29 +327,8 @@ def main():
     submodule = model.transformer.h[layer]
     
     custom_texts = [
-        # 1. 语义渐变测试 - 从具体到抽象
-        "The red apple tastes sweet and delicious for breakfast today.",
-        
-        # 2. 重复模式测试 - 测试专家专门化
-        "Python Python Python Python Python programming language Python",
-        
-        # 3. 语法结构测试 - 测试句法专家
-        "Although the weather was terrible, we decided to go hiking anyway.",
-        
-        # 4. 数字和逻辑测试 - 测试数值专家
-        "The equation 2 + 3 = 5 is a simple mathematical fact.",
-        
-        # 5. 情感极性测试 - 测试情感专家激活
-        "I absolutely love this wonderful beautiful amazing fantastic day!",
-        
-        # 6. 技术词汇测试 - 测试专业领域专家
-        "Neural networks use backpropagation algorithms for gradient descent optimization.",
-        
-        # 7. 时间和因果测试 - 测试时序专家
-        "First we prepare ingredients, then cook the meal, finally we eat.",
-        
-        # 8. 否定和对比测试 - 测试对比逻辑专家
-        "This is not wrong but rather completely right and absolutely correct."
+        "Existence oscillates between the echoes of nothingness and the shadows of everything.",
+        "Turn left at the red sign, then stop at the third door."
     ]
     
     data = create_custom_data_generator(custom_texts)
@@ -366,12 +345,12 @@ def main():
     )
     
     print(f"Loading SAE from {MODEL_PATH}...")
-    ae = MultiExpertAutoEncoder(
-        activation_dim=768, 
-        dict_size=32*768, 
-        k=32, 
-        experts=64, 
-        e=1, 
+    ae = MoeAutoEncoder(
+        activation_dim=768,
+        dict_size=32*768,
+        k=32,
+        experts=64,
+        e=8,
         heaviside=False
     )
     ae.load_state_dict(t.load(MODEL_PATH))
