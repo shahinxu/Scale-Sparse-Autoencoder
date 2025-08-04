@@ -263,9 +263,8 @@ class MoETrainer(SAETrainer):
         h = self.ae.gate(x - self.ae.b_gate)
         p = t.nn.functional.softmax(h, dim=-1)
         
-        _, topk_indices = p.topk(self.k, dim=-1)
+        topk_probs, topk_indices = p.topk(self.e, dim=-1)
         
-        topk_probs, _ = p.topk(self.k, dim=-1)
         flb = t.zeros_like(p)
         flb.scatter_(1, topk_indices, topk_probs)
         flb = flb.mean(dim=0)
