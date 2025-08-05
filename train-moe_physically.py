@@ -67,8 +67,8 @@ trainer_configs = [(base_trainer_config | {'k': combo[0], 'experts': combo[1], '
 
 with open("metrics_log.jsonl", "a") as f:
     for i, trainer_config in enumerate(trainer_configs):
-        ae = MultiExpertAutoEncoder(activation_dim=768, dict_size=32*768, k=4, experts=64, e=8, heaviside=False)
-        ae.load_state_dict(t.load("/home/xuzhen/switch_sae/dictionaries/MultiExpert_4_64_8/8.pt"))
+        ae = MultiExpertAutoEncoder(activation_dim=768, dict_size=32*768, k=32, experts=64, e=8, heaviside=False)
+        ae.load_state_dict(t.load("/home/xuzhen/switch_sae/dictionaries/MultiExpert_32_64_8/8.pt"))
         ae.to(device)
         metrics = evaluate(ae, test_buffer, device=device)
         safe_config = {k: (str(v) if callable(v) or isinstance(v, type) else v) for k, v in trainer_config.items()}

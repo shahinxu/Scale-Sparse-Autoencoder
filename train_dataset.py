@@ -9,7 +9,7 @@ import os
 import pandas as pd
 
 GPU = "5"
-MODEL = "MultiExpert_32_64_8"
+MODEL = "MultiExpert_4_64_8"
 MODEL_PATH = f"/home/xuzhen/switch_sae/dictionaries/{MODEL}/8.pt"
 OUTPUT_ROOT = f"expert_feature_analysis_{MODEL}_wikitext"
 
@@ -18,15 +18,11 @@ WIKITEXT_VERSION = "wikitext-2-raw-v1"
 SPLIT = "train"
 
 BATCH_SIZE = 200
-TOTAL_BATCHES = 5  # 减少批次便于测试
-TARGET_EXPERTS = [0, 1]
+TOTAL_BATCHES = 5
+TARGET_EXPERTS = list(range(64))
 
 
 class FixedOrderBuffer:
-    """
-    确保token顺序正确的简单buffer
-    一次处理一个文本，确保激活和token的完美对应
-    """
     
     def __init__(self, model, layer_name, device="cpu", max_length=128):
         self.model = model
@@ -35,7 +31,6 @@ class FixedOrderBuffer:
         self.max_length = max_length
         self.tokenizer = AutoTokenizer.from_pretrained(lm)
         
-        # 获取对应的layer module
         layer_parts = layer_name.split('.')
         self.layer_module = model
         for part in layer_parts:
@@ -47,15 +42,6 @@ class FixedOrderBuffer:
         print(f"FixedOrderBuffer initialized for layer: {layer_name}")
     
     def process_text(self, text):
-        """
-        处理单个文本，返回所有token的激活
-        
-        Returns:
-            activations: tensor [seq_len, hidden_dim]
-            tokens: list of token strings
-            token_ids: list of token ids
-        """
-        # Tokenize
         inputs = self.tokenizer(
             text,
             return_tensors="pt",
@@ -67,21 +53,17 @@ class FixedOrderBuffer:
         token_ids = inputs['input_ids'][0].tolist()
         tokens = [self.tokenizer.decode([tid]) for tid in token_ids]
         
-        # 通过模型获取激活
         with t.no_grad():
             with self.model.trace(text, scan=False, validate=False) as tracer:
                 hidden_states = self.layer_module.output.save()
             
-            # 直接获取激活，不使用.value
             activations = hidden_states
             if isinstance(activations, tuple):
                 activations = activations[0]
             
-            # 形状: [1, seq_len, hidden_dim] -> [seq_len, hidden_dim]
             if len(activations.shape) == 3:
-                activations = activations[0]  # 去掉batch维度
+                activations = activations[0]
             
-            # 确保长度匹配
             min_len = min(len(tokens), activations.shape[0])
             activations = activations[:min_len].to(self.device)
             tokens = tokens[:min_len]
@@ -92,7 +74,6 @@ class FixedOrderBuffer:
 
 def load_wikitext_batch(wikitext_path, version="wikitext-2-raw-v1", split="train", 
                        batch_size=200, batch_idx=0, min_length=20, max_length=200):
-    """批次加载WikiText数据集"""
     
     dataset_path = os.path.join(wikitext_path, version)
     parquet_files = []
@@ -148,22 +129,17 @@ def load_wikitext_batch(wikitext_path, version="wikitext-2-raw-v1", split="train
 
 
 class ExpertFeatureCollector:
-    """收集指定expert的每个feature的激活token信息"""
     
     def __init__(self, target_experts, expert_dict_size=768*32):
         self.target_experts = set(target_experts)
         self.expert_dict_size = expert_dict_size
         
-        # expert_id -> feature_id -> list of token activations
         self.expert_feature_tokens = defaultdict(lambda: defaultdict(list))
         
-        # expert_id -> feature_id -> max activation strength
         self.expert_feature_max_strength = defaultdict(lambda: defaultdict(float))
         
-        # expert_id -> feature_id -> best example
         self.expert_feature_best_example = defaultdict(dict)
         
-        # 统计信息
         self.expert_stats = defaultdict(lambda: {
             'total_features_activated': 0,
             'total_token_activations': 0,
@@ -175,17 +151,14 @@ class ExpertFeatureCollector:
     
     def add_feature_activation(self, expert_id, feature_id, token_text, activation_strength, 
                              text_id, token_pos, original_text):
-        """添加一个feature的token激活记录"""
         
         if expert_id not in self.target_experts:
             return
         
         global_text_id = self.total_texts_processed + text_id
         
-        # 计算相对feature ID (在该expert内的ID)
         relative_feature_id = feature_id % self.expert_dict_size
         
-        # 添加token激活记录
         token_record = {
             'token': token_text,
             'strength': activation_strength,
@@ -196,19 +169,15 @@ class ExpertFeatureCollector:
         
         self.expert_feature_tokens[expert_id][relative_feature_id].append(token_record)
         
-        # 更新最大激活强度和最佳示例
         if activation_strength > self.expert_feature_max_strength[expert_id][relative_feature_id]:
             self.expert_feature_max_strength[expert_id][relative_feature_id] = activation_strength
             self.expert_feature_best_example[expert_id][relative_feature_id] = token_record
         
-        # 更新统计信息
         self.expert_stats[expert_id]['total_token_activations'] += 1
         
-        # 更新feature计数（只计算已激活的feature）
         self.expert_stats[expert_id]['total_features_activated'] = len(self.expert_feature_tokens[expert_id])
     
     def update_batch_stats(self, batch_size):
-        """更新批次统计信息"""
         self.total_texts_processed += batch_size
         self.total_batches_processed += 1
         
@@ -216,7 +185,6 @@ class ExpertFeatureCollector:
             self.expert_stats[expert_id]['texts_processed'] = self.total_texts_processed
     
     def get_expert_feature_summary(self, expert_id, top_n=20):
-        """获取指定expert的feature摘要"""
         if expert_id not in self.expert_feature_tokens:
             return None
         
@@ -226,10 +194,8 @@ class ExpertFeatureCollector:
             max_strength = self.expert_feature_max_strength[expert_id][feature_id]
             best_example = self.expert_feature_best_example[expert_id][feature_id]
             
-            # 统计unique tokens
             unique_tokens = set(record['token'] for record in token_records)
             
-            # 获取最强激活的前几个token
             sorted_records = sorted(token_records, key=lambda x: x['strength'], reverse=True)
             top_tokens = sorted_records[:top_n]
             
@@ -243,7 +209,6 @@ class ExpertFeatureCollector:
                 'best_example': best_example
             })
         
-        # 按最大激活强度排序
         features_data.sort(key=lambda x: x['max_activation'], reverse=True)
         
         return {
@@ -257,7 +222,6 @@ class ExpertFeatureCollector:
         """保存expert feature分析结果"""
         os.makedirs(output_dir, exist_ok=True)
         
-        # 全局统计
         global_stats = {
             'target_experts': list(self.target_experts),
             'total_texts_processed': self.total_texts_processed,
@@ -279,7 +243,6 @@ class ExpertFeatureCollector:
         with open(os.path.join(output_dir, 'global_statistics.json'), 'w', encoding='utf-8') as f:
             json.dump(global_stats, f, indent=2, ensure_ascii=False)
         
-        # 为每个target expert生成详细分析
         for expert_id in self.target_experts:
             if expert_id not in self.expert_feature_tokens:
                 continue
@@ -287,17 +250,13 @@ class ExpertFeatureCollector:
             expert_dir = os.path.join(output_dir, f'expert_{expert_id:02d}')
             os.makedirs(expert_dir, exist_ok=True)
             
-            # 获取完整的feature摘要
             summary = self.get_expert_feature_summary(expert_id, top_n=50)
             
-            # 保存完整的JSON分析
             with open(os.path.join(expert_dir, 'feature_analysis.json'), 'w', encoding='utf-8') as f:
                 json.dump(summary, f, indent=2, ensure_ascii=False)
             
-            # 保存可读的文本报告
             self._save_readable_feature_report(expert_dir, summary)
             
-            # 保存每个feature的详细token列表
             self._save_feature_token_details(expert_dir, expert_id)
     
     def _save_readable_feature_report(self, expert_dir, summary):
@@ -467,16 +426,13 @@ def main():
     ae.to(device)
     ae.eval()
     
-    # 初始化feature收集器
     collector = ExpertFeatureCollector(
         target_experts=TARGET_EXPERTS,
         expert_dict_size=ae.expert_dict_size
     )
     
-    # 批次处理
     for batch_idx in range(TOTAL_BATCHES):
         try:
-            # 加载当前批次的数据
             batch_texts = load_wikitext_batch(
                 wikitext_path=WIKITEXT_PATH,
                 version=WIKITEXT_VERSION,
@@ -489,10 +445,8 @@ def main():
                 print(f"No more texts available at batch {batch_idx}")
                 break
             
-            # 使用FixedOrderBuffer分析当前批次
             analyze_batch_with_fixed_buffer(ae, buffer, batch_texts, batch_idx, collector, device)
             
-            # 每处理几个批次保存一次中间结果
             if (batch_idx + 1) % 2 == 0:
                 print(f"\nSaving intermediate results after batch {batch_idx + 1}...")
                 collector.save_expert_feature_analysis(OUTPUT_ROOT)
@@ -501,14 +455,11 @@ def main():
             print(f"Error processing batch {batch_idx}: {e}")
             continue
     
-    # 最终保存
     print(f"\nSaving final expert feature analysis results...")
     collector.save_expert_feature_analysis(OUTPUT_ROOT)
     
-    # 生成对比报告
     generate_comparison_report(collector)
     
-    # 最终统计
     print(f"\n✅ Expert Feature Analysis Complete (with FixedOrderBuffer)!")
     print(f"📊 Final Statistics:")
     print(f"  Total texts processed: {collector.total_texts_processed}")
@@ -533,7 +484,6 @@ def main():
 
 
 def generate_comparison_report(collector):
-    """生成对比分析报告"""
     comparison_file = os.path.join(OUTPUT_ROOT, "comparison_report.txt")
     
     with open(comparison_file, 'w', encoding='utf-8') as f:
