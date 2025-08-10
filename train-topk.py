@@ -7,13 +7,13 @@ from dictionary_learning.trainers.top_k import AutoEncoderTopK, TrainerTopK
 from dictionary_learning.evaluation import evaluate
 import wandb
 import argparse
-from config import lm, activation_dim, layer, hf, steps, n_ctxs
+from config import lm, activation_dim, layer, hf, hf_test, steps, n_ctxs
 import os
 import json
 os.environ["WANDB_MODE"] = "disabled"
 parser = argparse.ArgumentParser()
 parser.add_argument("--gpu", required=True)
-parser.add_argument('--dict_ratio', type=int, default=32//32)
+parser.add_argument('--dict_ratio', type=int, default=32)
 parser.add_argument("--ks", nargs="+", type=int, required=True)
 args = parser.parse_args()
 
@@ -22,6 +22,8 @@ model = LanguageModel(lm, dispatch=True, device_map=device)
 submodule = model.transformer.h[layer]
 data = hf_dataset_to_generator(hf)
 buffer = ActivationBuffer(data, model, submodule, d_submodule=activation_dim, n_ctxs=n_ctxs, device=device)
+data_test = hf_dataset_to_generator(hf_test, is_test=True, data='wikitext-103-raw-v1')
+buffer_test = ActivationBuffer(data_test, model, submodule, d_submodule=activation_dim, n_ctxs=n_ctxs, device=device)
 
 base_trainer_config = {
     'trainer' : TrainerTopK,
@@ -48,7 +50,7 @@ print("Training finished. Evaluating SAE...", flush=True)
 with open("metrics_log.jsonl", "a") as f:
     for i, trainer_config in enumerate(trainer_configs):
         ae = AutoEncoderTopK.from_pretrained(f'dictionaries/{cfg_filename(trainer_config)}/ae.pt', k = trainer_config['k'], device=device)
-        metrics = evaluate(ae, buffer, device=device)
+        metrics = evaluate(ae, buffer_test, device=device)
         safe_config = {k: (str(v) if callable(v) or isinstance(v, type) else v) for k, v in trainer_config.items()}
         record = {"trainer_config": safe_config, "metrics": metrics}
         f.write(json.dumps(record, ensure_ascii=False, default=str) + "\n")
@@ -57,10 +59,10 @@ wandb.finish()
 
 # with open("metrics_log.jsonl", "a") as f:
 #     for i, trainer_config in enumerate(trainer_configs):
-#         ae = AutoEncoderTopK(activation_dim=768, dict_size=32*768, k=32)
-#         ae.load_state_dict(t.load("/home/xuzhen/switch_sae/dictionaries/topk_5k/8.pt"))
+#         ae = AutoEncoderTopK(activation_dim=768, dict_size=4*768, k=32)
+#         ae.load_state_dict(t.load("/home/xuzhen/switch_sae/dictionaries/topk_8/8.pt"))
 #         ae.to(device)
-#         metrics = evaluate(ae, buffer, device=device)
+#         metrics = evaluate(ae, buffer_test, device=device)
 #         safe_config = {k: (str(v) if callable(v) or isinstance(v, type) else v) for k, v in trainer_config.items()}
 #         record = {"trainer_config": safe_config, "metrics": metrics}
 #         f.write(json.dumps(record, ensure_ascii=False, default=str) + "\n")

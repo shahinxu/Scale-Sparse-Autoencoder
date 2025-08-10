@@ -90,7 +90,7 @@ class MultiExpertAutoEncoder(nn.Module):
             sparse_weights = t.full_like(gate_scores, float('-inf'))
             sparse_weights.scatter_(-1, top_indices, top_values)
             expert_mask = t.softmax(sparse_weights, dim=-1)
-        
+
         all_expert_outputs = []
         for expert in self.expert_modules:
             z_expert = expert.encoder(x - self.b_dec)
@@ -142,6 +142,7 @@ class MultiExpertAutoEncoder(nn.Module):
     def forward(self, x, output_features=False):
         f = self.encode(x.view(-1, x.shape[-1]))
         top_acts, top_indices = f.topk(self.k, sorted=False)
+        print(top_indices)
         x_hat = self.decode(top_acts, top_indices).view(x.shape)
 
         if not output_features:
