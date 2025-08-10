@@ -142,7 +142,6 @@ class MultiExpertAutoEncoder(nn.Module):
     def forward(self, x, output_features=False):
         f = self.encode(x.view(-1, x.shape[-1]))
         top_acts, top_indices = f.topk(self.k, sorted=False)
-        print(top_indices)
         x_hat = self.decode(top_acts, top_indices).view(x.shape)
 
         if not output_features:

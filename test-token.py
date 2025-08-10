@@ -1,6 +1,7 @@
 import torch as t
 from nnsight import LanguageModel
 from dictionary_learning.trainers.moe_physically import MultiExpertAutoEncoder
+from dictionary_learning.trainers.top_k import AutoEncoderTopK
 import matplotlib.pyplot as plt
 import numpy as np
 from transformers import AutoTokenizer
@@ -10,7 +11,7 @@ import os
 import re
 
 GPU = "3"
-MODEL = "MultiExpert_32_8_1"
+MODEL = "topk_32"
 LAYER = 8
 MODEL_PATH = f"/home/xuzhen/switch_sae/dictionaries/{MODEL}/{LAYER}.pt"
 OUTPUT_ROOT = f"sae_analysis_results_{MODEL}_{LAYER}"
@@ -21,6 +22,27 @@ def sanitize_filename(text):
     safe_text = re.sub(r'[^\w\s-]', '', text)
     safe_text = re.sub(r'[-\s]+', '_', safe_text)
     return safe_text.strip('_')
+
+def detect_model_type(dictionary):
+    """检测模型类型并返回相关信息"""
+    if hasattr(dictionary, 'experts') and hasattr(dictionary, 'expert_dict_size'):
+        # 多专家模型
+        return {
+            'is_multi_expert': True,
+            'num_experts': dictionary.experts,
+            'expert_dict_size': dictionary.expert_dict_size,
+            'total_dict_size': dictionary.dict_size,
+            'model_type': 'MultiExpert'
+        }
+    else:
+        # 单专家模型 (TopK等)
+        return {
+            'is_multi_expert': False,
+            'num_experts': 1,
+            'expert_dict_size': dictionary.dict_size,
+            'total_dict_size': dictionary.dict_size,
+            'model_type': 'SingleExpert'
+        }
 
 class FixedOrderBuffer:
     """
@@ -99,14 +121,29 @@ class FixedOrderBuffer:
         return activations, tokens, token_ids
 
 @t.no_grad()
-def analyze_with_fixed_buffer(dictionary, buffer, texts, device="cpu"):
+def analyze_with_fixed_buffer(dictionary, buffer, texts, model_info, device="cpu"):
     """使用固定顺序的buffer分析文本"""
     
     print(f"\n{'='*80}")
     print(f"Analyzing {len(texts)} texts with Fixed Order Buffer")
+    print(f"Model Type: {model_info['model_type']}")
+    print(f"Multi-Expert: {model_info['is_multi_expert']}")
+    print(f"Number of Experts: {model_info['num_experts']}")
     print(f"{'='*80}")
     
     os.makedirs(OUTPUT_ROOT, exist_ok=True)
+    
+    # 保存模型信息
+    model_info_file = os.path.join(OUTPUT_ROOT, "model_info.txt")
+    with open(model_info_file, 'w', encoding='utf-8') as f:
+        f.write("Model Analysis Information\n")
+        f.write("="*50 + "\n")
+        f.write(f"Model Type: {model_info['model_type']}\n")
+        f.write(f"Multi-Expert: {model_info['is_multi_expert']}\n")
+        f.write(f"Number of Experts: {model_info['num_experts']}\n")
+        f.write(f"Expert Dict Size: {model_info['expert_dict_size']}\n")
+        f.write(f"Total Dict Size: {model_info['total_dict_size']}\n")
+        f.write(f"Analysis Date: August 10, 2025\n")
     
     for text_idx, text in enumerate(texts):
         # 处理单个文本
@@ -132,7 +169,9 @@ def analyze_with_fixed_buffer(dictionary, buffer, texts, device="cpu"):
         token_info_file = os.path.join(text_folder, "token_info.txt")
         with open(token_info_file, 'w', encoding='utf-8') as f:
             f.write(f"Text: {text}\n")
-            f.write(f"Total tokens: {len(tokens)}\n\n")
+            f.write(f"Total tokens: {len(tokens)}\n")
+            f.write(f"Model Type: {model_info['model_type']}\n")
+            f.write(f"Multi-Expert: {model_info['is_multi_expert']}\n\n")
             f.write("Token mapping:\n")
             for i, (token, tid) in enumerate(zip(tokens, token_ids)):
                 f.write(f"  {i:2d}: '{token}' (id: {tid})\n")
@@ -153,16 +192,22 @@ def analyze_with_fixed_buffer(dictionary, buffer, texts, device="cpu"):
                 # 计算重构误差
                 recon_error = t.linalg.norm(activation - token_reconstructed).item()
                 
-                # 分析expert激活
-                expert_dict_size = dictionary.expert_dict_size
+                # 分析expert激活 - 根据模型类型调整
                 expert_activations = defaultdict(list)
                 expert_activation_counts = defaultdict(int)
                 expert_total_activation = defaultdict(float)
                 
                 for fid, fval in zip(top_k_indices, top_k_values):
                     if fval.item() > 0:
-                        expert_id = fid.item() // expert_dict_size
-                        local_feature_id = fid.item() % expert_dict_size
+                        if model_info['is_multi_expert']:
+                            # 多专家模型：计算expert_id和local_feature_id
+                            expert_id = fid.item() // model_info['expert_dict_size']
+                            local_feature_id = fid.item() % model_info['expert_dict_size']
+                        else:
+                            # 单专家模型：所有特征都属于专家0
+                            expert_id = 0
+                            local_feature_id = fid.item()
+                        
                         expert_activations[expert_id].append((fid.item(), local_feature_id, fval.item()))
                         expert_activation_counts[expert_id] += 1
                         expert_total_activation[expert_id] += fval.item()
@@ -180,22 +225,34 @@ def analyze_with_fixed_buffer(dictionary, buffer, texts, device="cpu"):
                     f.write(f"Token: '{token_text}'\n")
                     f.write(f"Token ID: {token_ids[token_pos]}\n")
                     f.write(f"Text: {text}\n")
+                    f.write(f"Model Type: {model_info['model_type']}\n")
                     f.write(f"Reconstruction Error: {recon_error:.6f}\n\n")
                     
                     f.write(f"Expert Activations:\n")
-                    for expert_id in sorted(expert_activations.keys()):
-                        features = expert_activations[expert_id]
-                        f.write(f"  Expert {expert_id}: {len(features)} features, total={expert_total_activation[expert_id]:.4f}\n")
-                        for feature_id, local_id, value in sorted(features, key=lambda x: x[2], reverse=True):
-                            f.write(f"    Feature {feature_id} (local {local_id}): {value:.6f}\n")
+                    if model_info['is_multi_expert']:
+                        for expert_id in sorted(expert_activations.keys()):
+                            features = expert_activations[expert_id]
+                            f.write(f"  Expert {expert_id}: {len(features)} features, total={expert_total_activation[expert_id]:.4f}\n")
+                            for feature_id, local_id, value in sorted(features, key=lambda x: x[2], reverse=True):
+                                f.write(f"    Feature {feature_id} (local {local_id}): {value:.6f}\n")
+                    else:
+                        # 单专家模型的特殊显示
+                        if 0 in expert_activations:
+                            features = expert_activations[0]
+                            f.write(f"  Single Expert (ID 0): {len(features)} features, total={expert_total_activation[0]:.4f}\n")
+                            for feature_id, local_id, value in sorted(features, key=lambda x: x[2], reverse=True):
+                                f.write(f"    Feature {feature_id}: {value:.6f}\n")
                     f.write(f"\n")
                     
                     f.write(f"Top-{k} Features:\n")
                     for i, (fid, fval) in enumerate(zip(top_k_indices, top_k_values)):
                         if fval.item() > 0:
-                            expert_id = fid.item() // expert_dict_size
-                            local_id = fid.item() % expert_dict_size
-                            f.write(f"  {i+1:2d}. Feature {fid.item():5d} (Expert {expert_id}, Local {local_id:4d}): {fval.item():.6f}\n")
+                            if model_info['is_multi_expert']:
+                                expert_id = fid.item() // model_info['expert_dict_size']
+                                local_id = fid.item() % model_info['expert_dict_size']
+                                f.write(f"  {i+1:2d}. Feature {fid.item():5d} (Expert {expert_id}, Local {local_id:4d}): {fval.item():.6f}\n")
+                            else:
+                                f.write(f"  {i+1:2d}. Feature {fid.item():5d}: {fval.item():.6f}\n")
                 
                 # 创建可视化
                 create_token_visualization(
@@ -203,7 +260,7 @@ def analyze_with_fixed_buffer(dictionary, buffer, texts, device="cpu"):
                     top_k_indices, top_k_values,
                     expert_activations, expert_activation_counts, expert_total_activation,
                     recon_error, activation, token_reconstructed,
-                    text_folder, text, k
+                    text_folder, text, k, model_info
                 )
                 
             except Exception as e:
@@ -214,8 +271,8 @@ def create_token_visualization(token_text, batch_idx, token_pos,
                              top_k_indices, top_k_values,
                              expert_activations, expert_activation_counts, expert_total_activation,
                              recon_error, original_activation, reconstructed_activation, 
-                             text_folder, original_text, k):
-    """创建token可视化 - 优化版本"""
+                             text_folder, original_text, k, model_info):
+    """创建token可视化 - 支持单专家和多专家模型"""
     
     try:
         top_k_indices = top_k_indices.cpu()
@@ -226,12 +283,20 @@ def create_token_visualization(token_text, batch_idx, token_pos,
         fig = plt.figure(figsize=(20, 14))
         gs = fig.add_gridspec(3, 4, height_ratios=[1, 1.2, 1], width_ratios=[1, 1, 1, 1])
         
-        # 1. 合并的Expert概览 (将原来的两个expert图合并为一个)
+        # 1. Expert概览 - 根据模型类型调整
         ax1 = fig.add_subplot(gs[0, :2])
         if expert_activation_counts:
             expert_ids = sorted(expert_activation_counts.keys())
             counts = [expert_activation_counts[eid] for eid in expert_ids]
             total_activations = [expert_total_activation[eid] for eid in expert_ids]
+            
+            # 为单专家模型调整标题和标签
+            if model_info['is_multi_expert']:
+                title_suffix = f"Token: \"{token_text}\" (Pos: {token_pos})"
+                xlabel = 'Expert ID'
+            else:
+                title_suffix = f"Token: \"{token_text}\" (Pos: {token_pos}) - Single Expert Model"
+                xlabel = 'Expert (Single Model)'
             
             # 创建双轴图表
             bars1 = ax1.bar([x - 0.2 for x in expert_ids], counts, width=0.4, 
@@ -240,9 +305,9 @@ def create_token_visualization(token_text, batch_idx, token_pos,
             bars2 = ax1_twin.bar([x + 0.2 for x in expert_ids], total_activations, width=0.4,
                                 color='orange', alpha=0.8, label='Total Strength')
             
-            ax1.set_title(f'Expert Activations Overview\nToken: "{token_text}" (Pos: {token_pos})', 
+            ax1.set_title(f'Expert Activations Overview\n{title_suffix}', 
                           fontsize=14, fontweight='bold')
-            ax1.set_xlabel('Expert ID')
+            ax1.set_xlabel(xlabel)
             ax1.set_ylabel('Feature Count', color='steelblue')
             ax1_twin.set_ylabel('Total Activation', color='orange')
             ax1.grid(True, alpha=0.3)
@@ -265,7 +330,7 @@ def create_token_visualization(token_text, batch_idx, token_pos,
             lines2, labels2 = ax1_twin.get_legend_handles_labels()
             ax1.legend(lines1 + lines2, labels1 + labels2, loc='upper right')
         
-        # 2. 被激活的Feature详细列表
+        # 2. 被激活的Feature详细列表 - 根据模型类型调整格式
         ax2 = fig.add_subplot(gs[0, 2:])
         ax2.axis('off')
         
@@ -279,13 +344,20 @@ def create_token_visualization(token_text, batch_idx, token_pos,
             # 按激活值排序
             all_features.sort(key=lambda x: x[3], reverse=True)
             
-            # 创建表格文本
+            # 创建表格文本 - 根据模型类型调整格式
             feature_text = f"Top-{min(15, len(all_features))} Activated Features:\n"
-            feature_text += "Rank | Feature ID | Expert | Local ID | Value\n"
-            feature_text += "-" * 45 + "\n"
-            
-            for i, (fid, eid, lid, val) in enumerate(all_features[:15]):
-                feature_text += f"{i+1:3d}  | {fid:8d} | {eid:5d} | {lid:7d} | {val:6.3f}\n"
+            if model_info['is_multi_expert']:
+                feature_text += "Rank | Feature ID | Expert | Local ID | Value\n"
+                feature_text += "-" * 45 + "\n"
+                
+                for i, (fid, eid, lid, val) in enumerate(all_features[:15]):
+                    feature_text += f"{i+1:3d}  | {fid:8d} | {eid:5d} | {lid:7d} | {val:6.3f}\n"
+            else:
+                feature_text += "Rank | Feature ID | Value\n"
+                feature_text += "-" * 25 + "\n"
+                
+                for i, (fid, eid, lid, val) in enumerate(all_features[:15]):
+                    feature_text += f"{i+1:3d}  | {fid:8d} | {val:6.3f}\n"
             
             if len(all_features) > 15:
                 feature_text += f"... and {len(all_features) - 15} more features"
@@ -294,7 +366,7 @@ def create_token_visualization(token_text, batch_idx, token_pos,
                     verticalalignment='top', fontfamily='monospace',
                     bbox=dict(boxstyle="round,pad=0.3", facecolor="lightblue", alpha=0.7))
         
-        # 3. Feature activation values by expert (保留这个主要的可视化)
+        # 3. Feature activation values - 根据模型类型调整
         ax3 = fig.add_subplot(gs[1, :])
         if expert_activations:
             expert_ids_with_features = sorted(expert_activations.keys())
@@ -307,12 +379,19 @@ def create_token_visualization(token_text, batch_idx, token_pos,
                 features.sort(key=lambda x: x[2], reverse=True)
                 
                 feature_values = [f[2] for f in features]
-                feature_ids = [f[0] for f in features]  # 获取完整的feature ID
+                feature_ids = [f[0] for f in features]
                 x_positions = np.arange(len(feature_values)) + x_offset
                 
-                color = plt.cm.Set3(expert_id / 64)
-                bars = ax3.bar(x_positions, feature_values, color=color, alpha=0.8, 
-                              label=f'Expert {expert_id} ({len(features)} features)')
+                if model_info['is_multi_expert']:
+                    color = plt.cm.Set3(expert_id / max(64, model_info['num_experts']))
+                    label = f'Expert {expert_id} ({len(features)} features)'
+                    center_label = f'E{expert_id}'
+                else:
+                    color = plt.cm.Set3(0.5)  # 固定颜色
+                    label = f'Single Expert ({len(features)} features)'
+                    center_label = 'Expert'
+                
+                bars = ax3.bar(x_positions, feature_values, color=color, alpha=0.8, label=label)
                 
                 # 在每个bar上标注feature ID
                 for bar, fid, val in zip(bars, feature_ids, feature_values):
@@ -324,12 +403,19 @@ def create_token_visualization(token_text, batch_idx, token_pos,
                 if len(feature_values) > 0:
                     center_pos = x_offset + len(feature_values) / 2 - 0.5
                     x_ticks.append(center_pos)
-                    x_labels.append(f'E{expert_id}')
+                    x_labels.append(center_label)
                 
                 x_offset += len(feature_values) + 1
             
-            ax3.set_title(f'Feature Activation Values by Expert (with Feature IDs)', fontsize=14, fontweight='bold')
-            ax3.set_xlabel('Features (grouped by Expert)')
+            if model_info['is_multi_expert']:
+                title = 'Feature Activation Values by Expert (with Feature IDs)'
+                xlabel = 'Features (grouped by Expert)'
+            else:
+                title = 'Feature Activation Values (Single Expert Model)'
+                xlabel = 'Features'
+            
+            ax3.set_title(title, fontsize=14, fontweight='bold')
+            ax3.set_xlabel(xlabel)
             ax3.set_ylabel('Activation Value')
             if x_ticks:
                 ax3.set_xticks(x_ticks)
@@ -339,7 +425,7 @@ def create_token_visualization(token_text, batch_idx, token_pos,
             if len(expert_ids_with_features) <= 10:
                 ax3.legend(bbox_to_anchor=(1.05, 1), loc='upper left', fontsize=8)
         
-        # 4. 统计信息 (增强版)
+        # 4. 统计信息 - 添加模型类型信息
         ax4 = fig.add_subplot(gs[2, :2])
         ax4.axis('off')
         
@@ -361,6 +447,11 @@ def create_token_visualization(token_text, batch_idx, token_pos,
         info_text = f"""Token: "{token_text}" (Position: {token_pos})
 Original Text: {original_text[:50]}{'...' if len(original_text) > 50 else ''}
 Text Index: {batch_idx}
+
+=== Model Info ===
+Type: {model_info['model_type']}
+Multi-Expert: {model_info['is_multi_expert']}
+Experts: {model_info['num_experts']}
 
 === Reconstruction ===
 Error: {recon_error:.6f}
@@ -492,24 +583,41 @@ def main():
     )
     
     print(f"Loading SAE from {MODEL_PATH}...")
-    ae = MultiExpertAutoEncoder(
+    
+#     ae = MultiExpertAutoEncoder(
+#         activation_dim=768,
+#         dict_size=32*768,
+#         k=32,
+#         experts=8,
+#         e=1,
+#         heaviside=False
+#     )
+    ae = AutoEncoderTopK(
         activation_dim=768,
-        dict_size=32*768,
-        k=32,
-        experts=8,
-        e=1,
-        heaviside=False
+        dict_size=1*768,
+        k=32
     )
+    
     ae.load_state_dict(t.load(MODEL_PATH))
     ae.to(device)
     ae.eval()
     
+    # 检测模型类型
+    model_info = detect_model_type(ae)
+    print(f"\n🔍 Model Detection Results:")
+    print(f"  Model Type: {model_info['model_type']}")
+    print(f"  Multi-Expert: {model_info['is_multi_expert']}")
+    print(f"  Number of Experts: {model_info['num_experts']}")
+    print(f"  Expert Dict Size: {model_info['expert_dict_size']}")
+    print(f"  Total Dict Size: {model_info['total_dict_size']}")
+    
     print("Analyzing with Fixed Order Buffer...")
-    analyze_with_fixed_buffer(ae, buffer, custom_texts, device=device)
+    analyze_with_fixed_buffer(ae, buffer, custom_texts, model_info, device=device)
     
     print(f"\nAnalysis complete!")
     print(f"Results saved to: {OUTPUT_ROOT}/")
     print("Check token_info.txt in each folder to verify token order is correct!")
+    print(f"Model information saved to: {OUTPUT_ROOT}/model_info.txt")
 
 if __name__ == "__main__":
     main()
