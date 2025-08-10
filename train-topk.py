@@ -13,7 +13,7 @@ import json
 os.environ["WANDB_MODE"] = "disabled"
 parser = argparse.ArgumentParser()
 parser.add_argument("--gpu", required=True)
-parser.add_argument('--dict_ratio', type=int, default=32)
+parser.add_argument('--dict_ratio', type=int, default=32//32)
 parser.add_argument("--ks", nargs="+", type=int, required=True)
 args = parser.parse_args()
 

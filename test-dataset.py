@@ -8,8 +8,8 @@ from collections import defaultdict
 import os
 import pandas as pd
 
-GPU = "5"
-MODEL = "MultiExpert_4_64_8"
+GPU = "4"
+MODEL = "MultiExpert_32_8_1"
 MODEL_PATH = f"/home/xuzhen/switch_sae/dictionaries/{MODEL}/8.pt"
 OUTPUT_ROOT = f"expert_feature_analysis_{MODEL}_wikitext"
 
@@ -19,7 +19,7 @@ SPLIT = "train"
 
 BATCH_SIZE = 200
 TOTAL_BATCHES = 5
-TARGET_EXPERTS = list(range(64))
+TARGET_EXPERTS = list(range(8))
 
 
 class FixedOrderBuffer:
@@ -219,7 +219,6 @@ class ExpertFeatureCollector:
         }
     
     def save_expert_feature_analysis(self, output_dir):
-        """保存expert feature分析结果"""
         os.makedirs(output_dir, exist_ok=True)
         
         global_stats = {
@@ -260,7 +259,6 @@ class ExpertFeatureCollector:
             self._save_feature_token_details(expert_dir, expert_id)
     
     def _save_readable_feature_report(self, expert_dir, summary):
-        """保存可读的feature报告"""
         with open(os.path.join(expert_dir, 'feature_report.txt'), 'w', encoding='utf-8') as f:
             expert_id = summary['expert_id']
             stats = summary['statistics']
@@ -292,13 +290,11 @@ class ExpertFeatureCollector:
                 f.write(f"    Best Token: '{best_example['token']}' (strength: {best_example['strength']:.4f})\n")
                 f.write(f"    Context: {best_example['original_text']}\n")
                 
-                # 显示该feature的前10个最强token
                 top_tokens = feature_data['top_activations'][:10]
                 token_list = [f"'{record['token']}'({record['strength']:.3f})" for record in top_tokens]
                 f.write(f"    Top Tokens: {', '.join(token_list)}\n")
     
     def _save_feature_token_details(self, expert_dir, expert_id):
-        """保存每个feature的详细token信息"""
         features_dir = os.path.join(expert_dir, 'features')
         os.makedirs(features_dir, exist_ok=True)
         
@@ -309,7 +305,6 @@ class ExpertFeatureCollector:
                 f.write(f"Expert {expert_id} - Feature {feature_id} - Token Activations (FixedOrderBuffer)\n")
                 f.write("="*70 + "\n\n")
                 
-                # 按激活强度排序
                 sorted_records = sorted(token_records, key=lambda x: x['strength'], reverse=True)
                 
                 f.write(f"Total Activations: {len(token_records)}\n")
@@ -343,16 +338,12 @@ def analyze_batch_with_fixed_buffer(dictionary, buffer, texts, batch_idx, collec
             print(f"  Processing text {text_id}/{len(texts)}: '{text[:50]}...'")
         
         try:
-            # 使用FixedOrderBuffer处理文本
-            activations, tokens, token_ids = buffer.process_text(text)
+            activations, tokens, _ = buffer.process_text(text)
             
-            # 分析每个token
             for token_pos, (activation, token_text) in enumerate(zip(activations, tokens)):
-                # SAE分析
                 _, f = dictionary(activation.unsqueeze(0), output_features=True)
                 token_features = f[0]
                 
-                # 获取top-k激活的features
                 top_k_values, top_k_indices = token_features.topk(dictionary.k, sorted=True)
                 expert_dict_size = dictionary.expert_dict_size
                 
@@ -360,7 +351,6 @@ def analyze_batch_with_fixed_buffer(dictionary, buffer, texts, batch_idx, collec
                     if fval.item() > 0:
                         expert_id = fid.item() // expert_dict_size
                         
-                        # 只处理target experts
                         if expert_id in TARGET_EXPERTS:
                             collector.add_feature_activation(
                                 expert_id=expert_id,
@@ -417,9 +407,9 @@ def main():
     ae = MultiExpertAutoEncoder(
         activation_dim=768, 
         dict_size=32*768, 
-        k=4, 
-        experts=64, 
-        e=8, 
+        k=32, 
+        experts=8, 
+        e=1, 
         heaviside=False
     )
     ae.load_state_dict(t.load(MODEL_PATH))
