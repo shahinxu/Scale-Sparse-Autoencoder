@@ -1,6 +1,7 @@
 import torch as t
 from nnsight import LanguageModel
 from dictionary_learning.trainers.moe_physically import MultiExpertAutoEncoder
+from dictionary_learning.trainers.moe_physically_scale import MultiExpertScaleAutoEncoder
 from dictionary_learning.trainers.top_k import AutoEncoderTopK
 import matplotlib.pyplot as plt
 import numpy as np
@@ -10,8 +11,8 @@ from collections import defaultdict
 import os
 import re
 
-GPU = "3"
-MODEL = "topk_32"
+GPU = "4"
+MODEL = "MultiExpert_8_1"
 LAYER = 8
 MODEL_PATH = f"/home/xuzhen/switch_sae/dictionaries/{MODEL}/{LAYER}.pt"
 OUTPUT_ROOT = f"sae_analysis_results_{MODEL}_{LAYER}"
@@ -584,19 +585,19 @@ def main():
     
     print(f"Loading SAE from {MODEL_PATH}...")
     
-#     ae = MultiExpertAutoEncoder(
-#         activation_dim=768,
-#         dict_size=32*768,
-#         k=32,
-#         experts=8,
-#         e=1,
-#         heaviside=False
-#     )
-    ae = AutoEncoderTopK(
+    ae = MultiExpertAutoEncoder(
         activation_dim=768,
-        dict_size=1*768,
-        k=32
+        dict_size=32*768,
+        k=32,
+        experts=8,
+        e=1,
+        heaviside=False
     )
+    # ae = AutoEncoderTopK(
+    #     activation_dim=768,
+    #     dict_size=1*768,
+    #     k=32
+    # )
     
     ae.load_state_dict(t.load(MODEL_PATH))
     ae.to(device)

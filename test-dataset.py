@@ -1,6 +1,7 @@
 import torch as t
 from nnsight import LanguageModel
 from dictionary_learning.trainers.moe_physically import MultiExpertAutoEncoder
+from dictionary_learning.trainers.moe_physically_scale import MultiExpertScaleAutoEncoder
 from dictionary_learning.trainers.top_k import AutoEncoderTopK
 import json
 from transformers import AutoTokenizer
@@ -10,17 +11,17 @@ import os
 import pandas as pd
 
 GPU = "4"
-MODEL = "MultiExpert_64_1"
+MODEL = "MultiExpert_8_1"
 MODEL_PATH = f"/home/xuzhen/switch_sae/dictionaries/{MODEL}/8.pt"
 OUTPUT_ROOT = f"expert_feature_analysis_{MODEL}_wikitext"
 
 WIKITEXT_PATH = "/home/xuzhen/switch_sae/wikitext"
-WIKITEXT_VERSION = None
+WIKITEXT_VERSION = "wikitext-103-raw-v1"
 SPLIT = "train"
 
 BATCH_SIZE = 200
 TOTAL_BATCHES = 5
-TARGET_EXPERTS = list(range(64))
+TARGET_EXPERTS = list(range(8))
 
 
 class FixedOrderBuffer:
@@ -548,7 +549,7 @@ def main():
         activation_dim=768, 
         dict_size=32*768, 
         k=32, 
-        experts=64, 
+        experts=8, 
         e=1, 
         heaviside=False
     )
@@ -556,7 +557,6 @@ def main():
     ae.to(device)
     ae.eval()
     
-    # 检测模型类型
     model_info = detect_model_type(ae)
     print(f"\n🔍 Model Detection Results:")
     print(f"  Model Type: {model_info['model_type']}")

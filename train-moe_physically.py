@@ -67,8 +67,8 @@ wandb.finish()
 
 # with open("metrics_log.jsonl", "a") as f:
 #     for i, trainer_config in enumerate(trainer_configs):
-#         ae = MultiExpertAutoEncoder(activation_dim=768, dict_size=32*768, k=32, experts=64, e=8, heaviside=False)
-#         ae.load_state_dict(t.load("/home/xuzhen/switch_sae/dictionaries/MultiExpert_64_8/8.pt"))
+#         ae = MultiExpertAutoEncoder(activation_dim=768, dict_size=32*768, k=32, experts=8, e=1, heaviside=False)
+#         ae.load_state_dict(t.load("/home/xuzhen/switch_sae/dictionaries/MultiExpert_8_1/8.pt"))
 #         ae.to(device)
 #         metrics = evaluate(ae, test_buffer, device=device)
 #         safe_config = {k: (str(v) if callable(v) or isinstance(v, type) else v) for k, v in trainer_config.items()}
