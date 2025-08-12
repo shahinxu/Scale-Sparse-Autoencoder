@@ -1,6 +1,7 @@
 import torch as t
 from nnsight import LanguageModel
 from dictionary_learning.trainers.moe_physically import MultiExpertAutoEncoder
+from dictionary_learning.trainers.moe_physically_scale import MultiExpertScaleAutoEncoder
 import matplotlib.pyplot as plt
 from transformers import AutoTokenizer
 from config import lm, layer
@@ -10,7 +11,7 @@ import re
 import json
 
 GPU = "4"
-MODEL = "MultiExpert_64_8"
+MODEL = "MultiExpert_Scale_64_8"
 LAYER = 8
 MODEL_PATH = f"/home/xuzhen/switch_sae/dictionaries/{MODEL}/{LAYER}.pt"
 OUTPUT_ROOT = f"token_type_expert_analysis_{MODEL}_{LAYER}"
@@ -362,7 +363,7 @@ def main():
     model = LanguageModel(lm, dispatch=True, device_map=device)
     tokenizer = AutoTokenizer.from_pretrained(lm)
     
-    ae = MultiExpertAutoEncoder(
+    ae = MultiExpertScaleAutoEncoder(
         activation_dim=768,
         dict_size=32*768,
         k=32,

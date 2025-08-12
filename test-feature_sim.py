@@ -1,10 +1,8 @@
 import torch as t
 from dictionary_learning.trainers.moe_physically import MultiExpertAutoEncoder
 from dictionary_learning.trainers.moe_physically_scale import MultiExpertScaleAutoEncoder
-import os
 import random
 import numpy as np
-import json
 
 def compute_feature_max_similarity(
     dictionary,
@@ -22,19 +20,26 @@ def compute_feature_max_similarity(
     expert_modules = dictionary.expert_modules
     n_experts = len(expert_modules)
     
+    is_scale_model = hasattr(dictionary, 'decompose_low_high')
+    
     if feature_type == "decoder":
         feature_matrices = []
-        for expert in expert_modules:
+        for expert_idx, expert in enumerate(expert_modules):
             if hasattr(expert, 'decoder'):
                 decoder_weight = expert.decoder.weight if hasattr(expert.decoder, 'weight') else expert.decoder
+                if is_scale_model:
+                    decoder_weight, _, _ = dictionary.decompose_low_high(decoder_weight, dictionary.beta[expert_idx], "decoder")
                 feature_matrices.append(decoder_weight.to(device))
             else:
                 raise AttributeError(f"Expert does not have decoder attribute")
     elif feature_type == "encoder":
         feature_matrices = []
-        for expert in expert_modules:
+        for expert_idx, expert in enumerate(expert_modules):
             if hasattr(expert, 'encoder'):
                 encoder_weight = expert.encoder.weight if hasattr(expert.encoder, 'weight') else expert.encoder
+                if is_scale_model:
+                    print(dictionary.omega[expert_idx].item())
+                    encoder_weight, _, _ = dictionary.decompose_low_high(encoder_weight, dictionary.omega[expert_idx], "encoder")
                 feature_matrices.append(encoder_weight.T.to(device))
             else:
                 raise AttributeError(f"Expert does not have encoder attribute")
@@ -48,14 +53,14 @@ def compute_feature_max_similarity(
             'n_experts': n_experts,
             'features_per_expert': features_per_expert,
             'feature_type': feature_type,
-            'seed': seed
+            'seed': seed,
+            'is_scale_model': is_scale_model
         },
         'expert_stats': {},
         'global_stats': {},
         'summary': {}
     }
     
-    # 1. Expert内部相似度
     all_expert_max_sims = []
     
     for expert_id, feature_matrix in enumerate(feature_matrices):
@@ -83,7 +88,6 @@ def compute_feature_max_similarity(
         del features_normed, sim_matrix, max_similarities
         t.cuda.empty_cache()
     
-    # 2. 全局相似度（采样）
     all_features = t.cat(feature_matrices, dim=0)
     total_features = all_features.shape[0]
     sample_size = features_per_expert[0]
@@ -109,7 +113,6 @@ def compute_feature_max_similarity(
         'features_above_0.7': {'count': int(global_above_07), 'ratio': float(global_above_07 / n_global_features)}
     }
     
-    # 3. 比较统计
     expert_mean_max_sims = [results['expert_stats'][i]['mean_max_similarity'] for i in range(n_experts)]
     avg_expert_mean_max_sim = np.mean(expert_mean_max_sims)
     
@@ -137,20 +140,19 @@ def compute_feature_max_similarity(
     return results
 
 def print_results(results):
-    """简化的结果打印"""
     config = results['config']
     summary = results['summary']
     
-    print(f"\nResults for {config['feature_type']} features ({config['n_experts']} experts):")
+    scale_info = " (Scale)" if config['is_scale_model'] else ""
+    print(f"\nResults for {config['feature_type']} features ({config['n_experts']} experts){scale_info}:")
     print(f"Expert avg similarity: {summary['avg_expert_mean_max_sim']:.4f}")
     print(f"Global avg similarity: {summary['global_mean_max_sim']:.4f}")
     print(f"Expert/Global ratio: {summary['expert_vs_global_ratio']:.4f}")
     print(f"Clustering score (>0.8): {summary['clustering_score_0.8']:.3f}")
     print(f"Clustering score (>0.7): {summary['clustering_score_0.7']:.3f}")
-    print(f"Interpretation: {results['interpretation']['clustering_interpretation']}")
 
 GPU = "5"
-MODEL = "MultiExpert_Scale_64_4"  
+MODEL = "MultiExpert_Scale_64_2"
 MODEL_PATH = f"/home/xuzhen/switch_sae/dictionaries/{MODEL}/8.pt"
 
 def main():
@@ -158,17 +160,17 @@ def main():
     
     ae = MultiExpertScaleAutoEncoder(
         activation_dim=768,
-        dict_size=32*768, 
+        dict_size=32*768,
         k=32,
         experts=64,
-        e=4,
+        e=2,
         heaviside=False
     )
     ae.load_state_dict(t.load(MODEL_PATH))
     ae.to(device)
     ae.eval()
     
-    for feature_type in ["decoder"]:
+    for feature_type in ["encoder"]:
         results = compute_feature_max_similarity(
             dictionary=ae,
             feature_type=feature_type,
