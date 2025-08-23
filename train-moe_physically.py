@@ -26,7 +26,7 @@ model = LanguageModel(lm, dispatch=True, device_map=device)
 submodule = model.transformer.h[layer]
 data = hf_dataset_to_generator(hf)
 buffer = ActivationBuffer(data, model, submodule, d_submodule=activation_dim, n_ctxs=n_ctxs, device=device)
-test_data = hf_dataset_to_generator(hf_test, is_test=True, data='wikitext-103-raw-v1')
+test_data = hf_dataset_to_generator(hf_test, data='wikitext-103-raw-v1')
 test_buffer = ActivationBuffer(test_data, model, submodule, d_submodule=activation_dim, n_ctxs=n_ctxs, device=device)
 
 base_trainer_config = {
@@ -67,8 +67,8 @@ wandb.finish()
 
 # with open("metrics_log.jsonl", "a") as f:
 #     for i, trainer_config in enumerate(trainer_configs):
-#         ae = MultiExpertAutoEncoder(activation_dim=768, dict_size=32*768, k=32, experts=8, e=1, heaviside=False)
-#         ae.load_state_dict(t.load("/home/xuzhen/switch_sae/dictionaries/MultiExpert_8_1/8.pt"))
+#         ae = MultiExpertAutoEncoder(activation_dim=768, dict_size=32*768, k=32, experts=64, e=4, heaviside=False)
+#         ae.load_state_dict(t.load("/home/xuzhen/switch_sae/dictionaries/MultiExpert_64_4/8.pt"))
 #         ae.to(device)
 #         metrics = evaluate(ae, test_buffer, device=device)
 #         safe_config = {k: (str(v) if callable(v) or isinstance(v, type) else v) for k, v in trainer_config.items()}

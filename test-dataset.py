@@ -11,17 +11,17 @@ import os
 import pandas as pd
 
 GPU = "4"
-MODEL = "MultiExpert_8_1"
+MODEL = "MultiExpert_Scale_64_8"
 MODEL_PATH = f"/home/xuzhen/switch_sae/dictionaries/{MODEL}/8.pt"
 OUTPUT_ROOT = f"expert_feature_analysis_{MODEL}_wikitext"
 
-WIKITEXT_PATH = "/home/xuzhen/switch_sae/wikitext"
-WIKITEXT_VERSION = "wikitext-103-raw-v1"
+WIKITEXT_PATH = "/home/xuzhen/switch_sae/sae-auto-interp/openwebtext2"
+WIKITEXT_VERSION = None
 SPLIT = "train"
 
 BATCH_SIZE = 200
 TOTAL_BATCHES = 5
-TARGET_EXPERTS = list(range(8))
+TARGET_EXPERTS = list(range(64))
 
 
 class FixedOrderBuffer:
@@ -123,11 +123,9 @@ def load_dataset_batch(dataset_path, version=None, split="train",
     dataset_info = auto_detect_dataset_structure(dataset_path)
     
     if dataset_info['structure'] == 'direct':
-        # 直接从根目录读取parquet文件
         search_path = dataset_path
         print(f"Using direct dataset structure: {search_path}")
     elif dataset_info['structure'] == 'versioned':
-        # 使用版本子目录
         if version:
             search_path = os.path.join(dataset_path, version)
         else:
@@ -545,11 +543,11 @@ def main():
     )
     
     print(f"Loading SAE from {MODEL_PATH}...")
-    ae = MultiExpertAutoEncoder(
+    ae = MultiExpertScaleAutoEncoder(
         activation_dim=768, 
         dict_size=32*768, 
         k=32, 
-        experts=8, 
+        experts=64, 
         e=1, 
         heaviside=False
     )
@@ -558,12 +556,6 @@ def main():
     ae.eval()
     
     model_info = detect_model_type(ae)
-    print(f"\n🔍 Model Detection Results:")
-    print(f"  Model Type: {model_info['model_type']}")
-    print(f"  Multi-Expert: {model_info['is_multi_expert']}")
-    print(f"  Number of Experts: {model_info['num_experts']}")
-    print(f"  Expert Dict Size: {model_info['expert_dict_size']}")
-    print(f"  Total Dict Size: {model_info['total_dict_size']}")
     
     collector = ExpertFeatureCollector(
         target_experts=TARGET_EXPERTS,
@@ -607,14 +599,6 @@ def main():
     
     generate_comparison_report(collector, dataset_info)
     
-    print(f"\n✅ Expert Feature Analysis Complete (with FixedOrderBuffer)!")
-    print(f"📊 Final Statistics:")
-    print(f"  Model Type: {model_info['model_type']}")
-    print(f"  Dataset Structure: {dataset_info['structure']}")
-    print(f"  Has Version: {dataset_info['has_version']}")
-    print(f"  Total texts processed: {collector.total_texts_processed}")
-    print(f"  Total batches processed: {collector.total_batches_processed}")
-    
     for expert_id in collector.target_experts:
         if expert_id in collector.expert_feature_tokens:
             stats = collector.expert_stats[expert_id]
@@ -631,14 +615,6 @@ def main():
             print(f"    Features activated: 0")
             print(f"    Total activations: 0")
             print(f"    Avg activations per feature: N/A (no features activated)")
-    
-    print(f"\n📁 Results saved to: {OUTPUT_ROOT}/")
-    print(f"  - global_statistics.json: Global statistics")
-    print(f"  - expert_XX/feature_analysis.json: Complete analysis for each expert")
-    print(f"  - expert_XX/feature_report.txt: Readable analysis report")
-    print(f"  - expert_XX/features/feature_XXXX.txt: Detailed token list for each feature")
-    print(f"  - comparison_report.txt: Comparison analysis")
-
 
 def generate_comparison_report(collector, dataset_info):
     comparison_file = os.path.join(OUTPUT_ROOT, "comparison_report.txt")

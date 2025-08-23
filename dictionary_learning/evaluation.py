@@ -260,5 +260,5 @@ def evaluate(
     max_sim = sim_matrix.max(dim=1).values
     mean_max_sim = max_sim.mean().item()
     out["mean_decoder_max_similarity"] = mean_max_sim
-    out["decoder_sim_above_0.9"] = (max_sim > 0.9).sum().item() / max_sim.numel()
+    out["decoder_sim_above_0.9"] = (max_sim > 0.8).sum().item() / max_sim.numel()
     return out

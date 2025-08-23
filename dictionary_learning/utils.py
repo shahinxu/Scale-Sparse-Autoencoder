@@ -4,21 +4,19 @@ import io
 import json
 import argparse
 
-def hf_dataset_to_generator(dataset_name, split='train', streaming=True, max_length=20, is_test=False, data=None):
+def hf_dataset_to_generator(dataset_name, split='train', streaming=True, max_length=20, data=None):
     from transformers import AutoTokenizer
     from config import lm
 
     tokenizer = AutoTokenizer.from_pretrained(lm)
-    if is_test:
+    if data is not None:
         dataset = load_dataset(dataset_name, data, split=split, streaming=streaming)
     else:
         dataset = load_dataset(dataset_name, split=split, streaming=streaming)
     
     def gen():
         for x in iter(dataset):
-            # 编码并截断
             input_ids = tokenizer.encode(x['text'], truncation=True, max_length=max_length)
-            # 解码回文本
             text = tokenizer.decode(input_ids, skip_special_tokens=True)
             yield text
     

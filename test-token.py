@@ -12,7 +12,7 @@ import os
 import re
 
 GPU = "4"
-MODEL = "MultiExpert_8_1"
+MODEL = "MultiExpert_Scale_64_8"
 LAYER = 8
 MODEL_PATH = f"/home/xuzhen/switch_sae/dictionaries/{MODEL}/{LAYER}.pt"
 OUTPUT_ROOT = f"sae_analysis_results_{MODEL}_{LAYER}"
@@ -585,12 +585,12 @@ def main():
     
     print(f"Loading SAE from {MODEL_PATH}...")
     
-    ae = MultiExpertAutoEncoder(
+    ae = MultiExpertScaleAutoEncoder(
         activation_dim=768,
         dict_size=32*768,
         k=32,
-        experts=8,
-        e=1,
+        experts=64,
+        e=8,
         heaviside=False
     )
     # ae = AutoEncoderTopK(

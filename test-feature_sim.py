@@ -152,13 +152,13 @@ def print_results(results):
     print(f"Clustering score (>0.7): {summary['clustering_score_0.7']:.3f}")
 
 GPU = "5"
-MODEL = "MultiExpert_Scale_64_2"
+MODEL = "MultiExpert_64_2"
 MODEL_PATH = f"/home/xuzhen/switch_sae/dictionaries/{MODEL}/8.pt"
 
 def main():
     device = f'cuda:{GPU}'
     
-    ae = MultiExpertScaleAutoEncoder(
+    ae = MultiExpertAutoEncoder(
         activation_dim=768,
         dict_size=32*768,
         k=32,
@@ -170,7 +170,7 @@ def main():
     ae.to(device)
     ae.eval()
     
-    for feature_type in ["encoder"]:
+    for feature_type in ["decoder"]:
         results = compute_feature_max_similarity(
             dictionary=ae,
             feature_type=feature_type,
