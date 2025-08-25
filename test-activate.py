@@ -10,11 +10,24 @@ import os
 import re
 import json
 
-GPU = "4"
-MODEL = "MultiExpert_Scale_64_8"
+
+# --------- 配置区 ---------
+GPU = "0"
+EXPERTS = 64
 LAYER = 8
-MODEL_PATH = f"/home/xuzhen/switch_sae/dictionaries/{MODEL}/{LAYER}.pt"
-OUTPUT_ROOT = f"token_type_expert_analysis_{MODEL}_{LAYER}"
+ACT_DIM = 768
+DICT_SIZE = 32 * 768
+K = 32
+E = 8
+
+# 两个模型的路径和类型
+MODEL_A_PATH = f"dictionaries/MultiExpert_64_{E}/{LAYER}.pt"
+MODEL_B_PATH = f"dictionaries/MultiExpert_Scale_64_{E}/{LAYER}.pt"
+MODEL_A_TYPE = "plain"  # "plain" or "scale"
+MODEL_B_TYPE = "scale"  # "plain" or "scale"
+
+OUTPUT_ROOT = f"expert_usage_compare_exp{EXPERTS}_L{LAYER}"
+os.makedirs(OUTPUT_ROOT, exist_ok=True)
 
 def sanitize_filename(text):
     safe_text = re.sub(r'[^\w\s-]', '', text)
@@ -355,45 +368,133 @@ def save_results(category_results, category_name, analysis_stats, model_info, ou
         json.dump(detailed_results, f, indent=2, ensure_ascii=False)
 
 def main():
+    # 计算CDF
     device = f'cuda:{GPU}'
     top_n_features = 3
     max_tokens_per_category = 2000
-    
-    print("Loading model...")
+    print("Loading LM and tokenizer...")
     model = LanguageModel(lm, dispatch=True, device_map=device)
     tokenizer = AutoTokenizer.from_pretrained(lm)
-    
-    ae = MultiExpertScaleAutoEncoder(
-        activation_dim=768,
-        dict_size=32*768,
-        k=32,
-        experts=64,
-        e=8,
-        heaviside=False
-    )
-    
-    ae.load_state_dict(t.load(MODEL_PATH))
-    ae.to(device)
-    ae.eval()
-    
-    model_info = detect_model_type(ae)
-    print(f"Model: {model_info['model_type']}, Experts: {model_info['num_experts']}")
-    
-    os.makedirs(OUTPUT_ROOT, exist_ok=True)
-    
-    analyzer = TokenExpertAnalyzer(model, ae, tokenizer, model_info, device)
-    
-    for category_name, tokens in TOKEN_CATEGORIES.items():
-        print(f"Analyzing {category_name}...")
-        
-        category_results = analyze_token_category(analyzer, category_name, tokens, top_n_features, max_tokens_per_category)
-        
-        if category_results:
-            analysis_stats = create_expert_distribution_analysis(category_results, category_name, model_info, OUTPUT_ROOT)
-            save_results(category_results, category_name, analysis_stats, model_info, OUTPUT_ROOT)
-            print(f"Completed {category_name}: {len(category_results)} tokens, {analysis_stats['experts_used']} experts used")
-    
-    print(f"Results saved to {OUTPUT_ROOT}/")
+
+    # 加载模型A
+    if MODEL_A_TYPE == "scale":
+        aeA = MultiExpertScaleAutoEncoder(
+            activation_dim=ACT_DIM,
+            dict_size=DICT_SIZE,
+            k=K,
+            experts=EXPERTS,
+            e=E,
+            heaviside=False
+        )
+    else:
+        aeA = MultiExpertAutoEncoder(
+            activation_dim=ACT_DIM,
+            dict_size=DICT_SIZE,
+            k=K,
+            experts=EXPERTS,
+            e=E,
+            heaviside=False
+        )
+    aeA.load_state_dict(t.load(MODEL_A_PATH))
+    aeA.to(device)
+    aeA.eval()
+    infoA = detect_model_type(aeA)
+
+    # 加载模型B
+    if MODEL_B_TYPE == "scale":
+        aeB = MultiExpertScaleAutoEncoder(
+            activation_dim=ACT_DIM,
+            dict_size=DICT_SIZE,
+            k=K,
+            experts=EXPERTS,
+            e=E,
+            heaviside=False
+        )
+    else:
+        aeB = MultiExpertAutoEncoder(
+            activation_dim=ACT_DIM,
+            dict_size=DICT_SIZE,
+            k=K,
+            experts=EXPERTS,
+            e=E,
+            heaviside=False
+        )
+    aeB.load_state_dict(t.load(MODEL_B_PATH))
+    aeB.to(device)
+    aeB.eval()
+    infoB = detect_model_type(aeB)
+
+    # 只分析verbs_past类别
+    category_name = 'verbs_past'
+    tokens = TOKEN_CATEGORIES[category_name]
+    print(f"Analyzing {category_name} ({len(tokens)} tokens)...")
+
+    analyzerA = TokenExpertAnalyzer(model, aeA, tokenizer, infoA, device)
+    analyzerB = TokenExpertAnalyzer(model, aeB, tokenizer, infoB, device)
+
+    resultsA = analyze_token_category(analyzerA, category_name, tokens, top_n_features, max_tokens_per_category)
+    resultsB = analyze_token_category(analyzerB, category_name, tokens, top_n_features, max_tokens_per_category)
+
+    def get_expert_usage(results):
+        expert_usage_count = defaultdict(int)
+        for result in results:
+            for expert_id in result['expert_activations'].keys():
+                expert_usage_count[expert_id] += 1
+        return expert_usage_count
+
+    usageA = get_expert_usage(resultsA)
+    usageB = get_expert_usage(resultsB)
+
+    def get_sorted_expert_density(usage):
+        items = sorted(usage.items(), key=lambda x: x[1], reverse=True)
+        ids = [eid for eid, _ in items]
+        counts = [usage[eid] for eid in ids]
+        total = sum(counts)
+        density = [c / total if total > 0 else 0.0 for c in counts]
+        return ids, density
+
+    idsA, densityA = get_sorted_expert_density(usageA)
+    idsB, densityB = get_sorted_expert_density(usageB)
+
+    # 柱状图（重叠）
+    bw = 1.0
+    plt.figure(figsize=(8, 6))
+    xA = range(len(densityA))
+    xB = range(len(densityB))
+    plt.bar(xA, densityA, width=bw, color='tab:blue', alpha=0.6, label=MODEL_A_TYPE, align='center')
+    plt.bar(xB, densityB, width=bw, color='tab:orange', alpha=0.6, label=MODEL_B_TYPE, align='center')
+    plt.xlabel('Expert (sorted by own usage, position index)')
+    plt.ylabel('Proportion of tokens')
+    plt.title(f'Expert Usage Distribution ({category_name})')
+    plt.grid(True, axis='y', alpha=0.3)
+    plt.legend()
+    plt.tight_layout()
+    fname_bar = f"{MODEL_A_TYPE[:2]}_{MODEL_B_TYPE[:2]}_exp{EXPERTS}_L{LAYER}_bar.png"
+    output_file_bar = os.path.join(OUTPUT_ROOT, fname_bar)
+    plt.savefig(output_file_bar, dpi=300, bbox_inches='tight')
+    plt.close()
+    print(f"Bar plot saved to {output_file_bar}")
+
+    # CDF图
+    import numpy as np
+    def get_cdf(density):
+        return np.cumsum(density)
+    cdfA = get_cdf(densityA)
+    cdfB = get_cdf(densityB)
+    plt.figure(figsize=(8, 6))
+    plt.plot(xA, cdfA, color='tab:blue', label=MODEL_A_TYPE, linewidth=2)
+    plt.plot(xB, cdfB, color='tab:orange', label=MODEL_B_TYPE, linewidth=2)
+    plt.xlabel('Expert (sorted by own usage, position index)')
+    plt.ylabel('Cumulative proportion (CDF)')
+    plt.title(f'Expert Usage CDF ({category_name})')
+    plt.grid(True, axis='y', alpha=0.3)
+    plt.legend()
+    plt.tight_layout()
+    fname_cdf = f"{MODEL_A_TYPE[:2]}_{MODEL_B_TYPE[:2]}_exp{EXPERTS}_L{LAYER}_cdf.png"
+    output_file_cdf = os.path.join(OUTPUT_ROOT, fname_cdf)
+    plt.savefig(output_file_cdf, dpi=300, bbox_inches='tight')
+    plt.close()
+    print(f"CDF plot saved to {output_file_cdf}")
 
 if __name__ == "__main__":
     main()
