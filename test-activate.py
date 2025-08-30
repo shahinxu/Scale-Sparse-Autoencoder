@@ -18,13 +18,13 @@ LAYER = 8
 ACT_DIM = 768
 DICT_SIZE = 32 * 768
 K = 32
-E = 8
-
-# 两个模型的路径和类型
-MODEL_A_PATH = f"dictionaries/MultiExpert_64_{E}/{LAYER}.pt"
-MODEL_B_PATH = f"dictionaries/MultiExpert_Scale_64_{E}/{LAYER}.pt"
+E_1 = 1
+E_2 = 2
 MODEL_A_TYPE = "plain"  # "plain" or "scale"
-MODEL_B_TYPE = "scale"  # "plain" or "scale"
+MODEL_B_TYPE = "plain"  # "plain" or "scale"
+MODEL_A_PATH = f"dictionaries/MultiExpert_Scale_64_{E_1}/{LAYER}.pt" if MODEL_A_TYPE == "scale" else f"dictionaries/MultiExpert_64_{E_1}/{LAYER}.pt"
+MODEL_B_PATH = f"dictionaries/MultiExpert_Scale_64_{E_2}/{LAYER}.pt" if MODEL_B_TYPE == "scale" else f"dictionaries/MultiExpert_64_{E_2}/{LAYER}.pt"
+
 
 OUTPUT_ROOT = f"expert_usage_compare_exp{EXPERTS}_L{LAYER}"
 os.makedirs(OUTPUT_ROOT, exist_ok=True)
@@ -383,7 +383,7 @@ def main():
             dict_size=DICT_SIZE,
             k=K,
             experts=EXPERTS,
-            e=E,
+            e=E_1,
             heaviside=False
         )
     else:
@@ -392,7 +392,7 @@ def main():
             dict_size=DICT_SIZE,
             k=K,
             experts=EXPERTS,
-            e=E,
+            e=E_1,
             heaviside=False
         )
     aeA.load_state_dict(t.load(MODEL_A_PATH))
@@ -407,7 +407,7 @@ def main():
             dict_size=DICT_SIZE,
             k=K,
             experts=EXPERTS,
-            e=E,
+            e=E_2,
             heaviside=False
         )
     else:
@@ -416,7 +416,7 @@ def main():
             dict_size=DICT_SIZE,
             k=K,
             experts=EXPERTS,
-            e=E,
+            e=E_2,
             heaviside=False
         )
     aeB.load_state_dict(t.load(MODEL_B_PATH))
@@ -461,36 +461,43 @@ def main():
     plt.figure(figsize=(8, 6))
     xA = range(len(densityA))
     xB = range(len(densityB))
-    plt.bar(xA, densityA, width=bw, color='tab:blue', alpha=0.6, label=MODEL_A_TYPE, align='center')
-    plt.bar(xB, densityB, width=bw, color='tab:orange', alpha=0.6, label=MODEL_B_TYPE, align='center')
+    plt.bar(xA, densityA, width=bw, color='tab:blue', alpha=0.6, label=MODEL_A_TYPE + " " + str(E_1), align='center')
+    plt.bar(xB, densityB, width=bw, color='tab:orange', alpha=0.6, label=MODEL_B_TYPE + " " + str(E_2), align='center')
     plt.xlabel('Expert (sorted by own usage, position index)')
     plt.ylabel('Proportion of tokens')
     plt.title(f'Expert Usage Distribution ({category_name})')
     plt.grid(True, axis='y', alpha=0.3)
     plt.legend()
     plt.tight_layout()
-    fname_bar = f"{MODEL_A_TYPE[:2]}_{MODEL_B_TYPE[:2]}_exp{EXPERTS}_L{LAYER}_bar.png"
+    fname_bar = f"{MODEL_A_TYPE[:2]}_{MODEL_B_TYPE[:2]}_{E_1}_{E_2}_bar.png"
     output_file_bar = os.path.join(OUTPUT_ROOT, fname_bar)
     plt.savefig(output_file_bar, dpi=300, bbox_inches='tight')
     plt.close()
     print(f"Bar plot saved to {output_file_bar}")
 
-    # CDF图
+    # CDF阶梯图
     import numpy as np
-    def get_cdf(density):
-        return np.cumsum(density)
-    cdfA = get_cdf(densityA)
-    cdfB = get_cdf(densityB)
+    def get_cdf_full(density):
+        cdf = np.cumsum(density)
+        cdf = np.concatenate([[0], cdf])
+        x = np.arange(len(cdf))
+        if abs(cdf[-1] - 1.0) > 1e-6:
+            cdf[-1] = 1.0
+        return x, cdf
+
+    xA_cdf, cdfA = get_cdf_full(densityA)
+    xB_cdf, cdfB = get_cdf_full(densityB)
+
     plt.figure(figsize=(8, 6))
-    plt.plot(xA, cdfA, color='tab:blue', label=MODEL_A_TYPE, linewidth=2)
-    plt.plot(xB, cdfB, color='tab:orange', label=MODEL_B_TYPE, linewidth=2)
-    plt.xlabel('Expert (sorted by own usage, position index)')
-    plt.ylabel('Cumulative proportion (CDF)')
-    plt.title(f'Expert Usage CDF ({category_name})')
+    plt.step(xA_cdf, cdfA, where='pre', color='tab:blue', label=MODEL_A_TYPE + " " + str(E_1), linewidth=2)
+    plt.step(xB_cdf, cdfB, where='pre', color='tab:orange', label=MODEL_B_TYPE + " " + str(E_2), linewidth=2)
+    # plt.xlabel('Expert (sorted by own usage, position index)')
+    plt.ylabel('CDF')
+    plt.ylim(0, 1)
     plt.grid(True, axis='y', alpha=0.3)
     plt.legend()
     plt.tight_layout()
-    fname_cdf = f"{MODEL_A_TYPE[:2]}_{MODEL_B_TYPE[:2]}_exp{EXPERTS}_L{LAYER}_cdf.png"
+    fname_cdf = f"{MODEL_A_TYPE[:2]}_{MODEL_B_TYPE[:2]}_{E_1}_{E_2}_cdf.png"
     output_file_cdf = os.path.join(OUTPUT_ROOT, fname_cdf)
     plt.savefig(output_file_cdf, dpi=300, bbox_inches='tight')
     plt.close()

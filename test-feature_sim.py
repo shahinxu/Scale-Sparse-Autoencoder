@@ -1,184 +1,176 @@
+
 import torch as t
-from dictionary_learning.trainers.moe_physically import MultiExpertAutoEncoder
-from dictionary_learning.trainers.moe_physically_scale import MultiExpertScaleAutoEncoder
-import random
 import numpy as np
-
-def compute_feature_max_similarity(
-    dictionary,
-    feature_type="encoder",
-    seed=42,
-    device="cpu"
-):
-    if not hasattr(dictionary, "expert_modules"):
-        raise AttributeError("Dictionary must have 'expert_modules' attribute.")
-    
-    random.seed(seed)
-    t.manual_seed(seed)
-    np.random.seed(seed)
-    
-    expert_modules = dictionary.expert_modules
-    n_experts = len(expert_modules)
-    
-    is_scale_model = hasattr(dictionary, 'decompose_low_high')
-    
-    if feature_type == "decoder":
-        feature_matrices = []
-        for expert_idx, expert in enumerate(expert_modules):
-            if hasattr(expert, 'decoder'):
-                decoder_weight = expert.decoder.weight if hasattr(expert.decoder, 'weight') else expert.decoder
-                if is_scale_model:
-                    decoder_weight, _, _ = dictionary.decompose_low_high(decoder_weight, dictionary.beta[expert_idx], "decoder")
-                feature_matrices.append(decoder_weight.to(device))
-            else:
-                raise AttributeError(f"Expert does not have decoder attribute")
-    elif feature_type == "encoder":
-        feature_matrices = []
-        for expert_idx, expert in enumerate(expert_modules):
-            if hasattr(expert, 'encoder'):
-                encoder_weight = expert.encoder.weight if hasattr(expert.encoder, 'weight') else expert.encoder
-                if is_scale_model:
-                    print(dictionary.omega[expert_idx].item())
-                    encoder_weight, _, _ = dictionary.decompose_low_high(encoder_weight, dictionary.omega[expert_idx], "encoder")
-                feature_matrices.append(encoder_weight.T.to(device))
-            else:
-                raise AttributeError(f"Expert does not have encoder attribute")
-    else:
-        raise ValueError("feature_type must be 'decoder' or 'encoder'")
-    
-    features_per_expert = [mat.shape[0] for mat in feature_matrices]
-    
-    results = {
-        'config': {
-            'n_experts': n_experts,
-            'features_per_expert': features_per_expert,
-            'feature_type': feature_type,
-            'seed': seed,
-            'is_scale_model': is_scale_model
-        },
-        'expert_stats': {},
-        'global_stats': {},
-        'summary': {}
-    }
-    
-    all_expert_max_sims = []
-    
-    for expert_id, feature_matrix in enumerate(feature_matrices):
-        n_features = feature_matrix.shape[0]
-        
-        features_normed = feature_matrix / feature_matrix.norm(dim=1, keepdim=True)
-        sim_matrix = features_normed @ features_normed.T
-        sim_matrix.fill_diagonal_(-float('inf'))
-        
-        max_similarities, _ = sim_matrix.max(dim=1)
-        max_similarities = max_similarities.detach().cpu().numpy()
-        
-        above_08 = np.sum(max_similarities > 0.8)
-        above_07 = np.sum(max_similarities > 0.7)
-        
-        results['expert_stats'][expert_id] = {
-            'n_features': n_features,
-            'mean_max_similarity': float(np.mean(max_similarities)),
-            'features_above_0.8': {'count': int(above_08), 'ratio': float(above_08 / n_features)},
-            'features_above_0.7': {'count': int(above_07), 'ratio': float(above_07 / n_features)}
-        }
-        
-        all_expert_max_sims.extend(max_similarities.tolist())
-        
-        del features_normed, sim_matrix, max_similarities
-        t.cuda.empty_cache()
-    
-    all_features = t.cat(feature_matrices, dim=0)
-    total_features = all_features.shape[0]
-    sample_size = features_per_expert[0]
-    
-    sampled_indices = random.sample(range(total_features), min(sample_size, total_features))
-    sampled_features = all_features[sampled_indices]
-    
-    sampled_features_normed = sampled_features / sampled_features.norm(dim=1, keepdim=True)
-    global_sim_matrix = sampled_features_normed @ sampled_features_normed.T
-    global_sim_matrix.fill_diagonal_(-float('inf'))
-    
-    global_max_similarities, _ = global_sim_matrix.max(dim=1)
-    global_max_similarities = global_max_similarities.detach().cpu().numpy()
-    
-    n_global_features = len(global_max_similarities)
-    global_above_08 = np.sum(global_max_similarities > 0.8)
-    global_above_07 = np.sum(global_max_similarities > 0.7)
-    
-    results['global_stats'] = {
-        'n_sampled_features': int(n_global_features),
-        'mean_max_similarity': float(np.mean(global_max_similarities)),
-        'features_above_0.8': {'count': int(global_above_08), 'ratio': float(global_above_08 / n_global_features)},
-        'features_above_0.7': {'count': int(global_above_07), 'ratio': float(global_above_07 / n_global_features)}
-    }
-    
-    expert_mean_max_sims = [results['expert_stats'][i]['mean_max_similarity'] for i in range(n_experts)]
-    avg_expert_mean_max_sim = np.mean(expert_mean_max_sims)
-    
-    avg_expert_ratio_08 = np.mean([results['expert_stats'][i]['features_above_0.8']['ratio'] for i in range(n_experts)])
-    avg_expert_ratio_07 = np.mean([results['expert_stats'][i]['features_above_0.7']['ratio'] for i in range(n_experts)])
-    
-    global_ratio_08 = results['global_stats']['features_above_0.8']['ratio']
-    global_ratio_07 = results['global_stats']['features_above_0.7']['ratio']
-    
-    results['summary'] = {
-        'avg_expert_mean_max_sim': float(avg_expert_mean_max_sim),
-        'global_mean_max_sim': results['global_stats']['mean_max_similarity'],
-        'expert_vs_global_ratio': float(avg_expert_mean_max_sim / max(results['global_stats']['mean_max_similarity'], 1e-8)),
-        'avg_expert_features_above_0.8_ratio': float(avg_expert_ratio_08),
-        'global_features_above_0.8_ratio': float(global_ratio_08),
-        'avg_expert_features_above_0.7_ratio': float(avg_expert_ratio_07),
-        'global_features_above_0.7_ratio': float(global_ratio_07),
-        'clustering_score_0.8': float(avg_expert_ratio_08 - global_ratio_08),
-        'clustering_score_0.7': float(avg_expert_ratio_07 - global_ratio_07)
-    }
-    
-    del all_features, sampled_features, sampled_features_normed, global_sim_matrix, feature_matrices
-    t.cuda.empty_cache()
-    
-    return results
-
-def print_results(results):
-    config = results['config']
-    summary = results['summary']
-    
-    scale_info = " (Scale)" if config['is_scale_model'] else ""
-    print(f"\nResults for {config['feature_type']} features ({config['n_experts']} experts){scale_info}:")
-    print(f"Expert avg similarity: {summary['avg_expert_mean_max_sim']:.4f}")
-    print(f"Global avg similarity: {summary['global_mean_max_sim']:.4f}")
-    print(f"Expert/Global ratio: {summary['expert_vs_global_ratio']:.4f}")
-    print(f"Clustering score (>0.8): {summary['clustering_score_0.8']:.3f}")
-    print(f"Clustering score (>0.7): {summary['clustering_score_0.7']:.3f}")
+from dictionary_learning.trainers.moe_physically import MultiExpertAutoEncoder
+import matplotlib.pyplot as plt
+import csv
 
 GPU = "5"
-MODEL = "MultiExpert_64_2"
-MODEL_PATH = f"/home/xuzhen/switch_sae/dictionaries/{MODEL}/8.pt"
+
+
+def compute_in_expert_metrics(dictionary, device="cpu"):
+    expert_modules = dictionary.expert_modules
+    feature_matrices = [expert.decoder.weight if hasattr(expert.decoder, 'weight') else expert.decoder for expert in expert_modules]
+    feature_matrices = [mat.to(device) for mat in feature_matrices]
+    all_mean = []
+    all_max_mean = []
+    all_max_ratio = []
+    for mat in feature_matrices:
+        F = mat / mat.norm(dim=1, keepdim=True)
+        S = F @ F.T
+        S.fill_diagonal_(-float('inf'))
+        mean_sim = S[S != -float('inf')].mean().item()
+        max_sim = S.max(dim=1)[0].detach().cpu().numpy()
+        all_mean.append(mean_sim)
+        all_max_mean.append(np.mean(max_sim))
+        all_max_ratio.append(np.mean(max_sim > 0.9))
+    in_expert_mean = np.mean(all_mean)
+    in_expert_max_mean = np.mean(all_max_mean)
+    in_expert_max_mean_ratio = np.mean(all_max_ratio)
+    return in_expert_mean, in_expert_max_mean, in_expert_max_mean_ratio
+
+
+def compute_inter_expert_metrics(dictionary, device="cpu"):
+    import random
+    expert_modules = dictionary.expert_modules
+    feature_matrices = [expert.decoder.weight if hasattr(expert.decoder, 'weight') else expert.decoder for expert in expert_modules]
+    feature_matrices = [mat.to(device) for mat in feature_matrices]
+    feature_counts = [mat.shape[0] for mat in feature_matrices]
+    all_features = t.cat(feature_matrices, dim=0)
+    total_features = all_features.shape[0]
+    all_mean = []
+    all_max_mean = []
+    all_max_ratio = []
+    for count in feature_counts:
+        idx = random.sample(range(total_features), count)
+        F = all_features[idx]
+        F = F / F.norm(dim=1, keepdim=True)
+        S = F @ F.T
+        S.fill_diagonal_(-float('inf'))
+        mean_sim = S[S != -float('inf')].mean().item()
+        max_sim = S.max(dim=1)[0].detach().cpu().numpy()
+        all_mean.append(mean_sim)
+        all_max_mean.append(np.mean(max_sim))
+        all_max_ratio.append(np.mean(max_sim > 0.9))
+    inter_expert_mean = np.mean(all_mean)
+    inter_expert_max_mean = np.mean(all_max_mean)
+    inter_expert_max_mean_ratio = np.mean(all_max_ratio)
+    return inter_expert_mean, inter_expert_max_mean, inter_expert_max_mean_ratio
+
 
 def main():
     device = f'cuda:{GPU}'
-    
-    ae = MultiExpertAutoEncoder(
-        activation_dim=768,
-        dict_size=32*768,
-        k=32,
-        experts=64,
-        e=2,
-        heaviside=False
-    )
-    ae.load_state_dict(t.load(MODEL_PATH))
-    ae.to(device)
-    ae.eval()
-    
-    for feature_type in ["decoder"]:
-        results = compute_feature_max_similarity(
-            dictionary=ae,
-            feature_type=feature_type,
-            seed=42,
-            device=device
+    activations = [1, 2, 4, 8, 16]
+    in_mean_list = []
+    in_max_mean_list = []
+    in_max_ratio_list = []
+    inter_mean_list = []
+    inter_max_mean_list = []
+    inter_max_ratio_list = []
+
+    for activation in activations:
+        MODEL = f"MultiExpert_64_{activation}"
+        MODEL_PATH = f"/home/xuzhen/switch_sae/dictionaries/{MODEL}/8.pt"
+        ae = MultiExpertAutoEncoder(
+            activation_dim=768,
+            dict_size=32*768,
+            k=32,
+            experts=64,
+            e=activation,
+            heaviside=False
         )
-        
-        print_results(results)
-    
+        ae.load_state_dict(t.load(MODEL_PATH))
+        ae.to(device)
+        ae.eval()
+        in_expert_mean, in_expert_max_mean, in_expert_max_mean_ratio = compute_in_expert_metrics(ae, device=device)
+        inter_expert_mean, inter_expert_max_mean, inter_expert_max_mean_ratio = compute_inter_expert_metrics(ae, device=device)
+        in_mean_list.append(in_expert_mean)
+        in_max_mean_list.append(in_expert_max_mean)
+        in_max_ratio_list.append(in_expert_max_mean_ratio)
+        inter_mean_list.append(inter_expert_mean)
+        inter_max_mean_list.append(inter_expert_max_mean)
+        inter_max_ratio_list.append(inter_expert_max_mean_ratio)
+
+    x = np.arange(len(activations))
+
+    def draw_lollipop_single(x, inter_vals, in_vals, activations, title, ylabel, outpath):
+        plt.figure(figsize=(8,5))
+        for xi, inter_v, in_v in zip(x, inter_vals, in_vals):
+            plt.plot([xi, xi], [inter_v, in_v], color='gray', linewidth=2, zorder=1)
+            plt.scatter(xi, inter_v, color='C1', s=80, zorder=2, label='inter-expert' if xi==0 else '')
+            plt.scatter(xi, in_v, color='C0', s=80, zorder=3, label='in-expert' if xi==0 else '')
+            delta = in_v - inter_v
+            y_annot = max(inter_v, in_v) + 0.01 * (abs(max(inter_vals.max(), in_vals.max())) + 1e-8)
+            plt.text(xi, y_annot, f'{delta:.3f}', ha='center', va='bottom', fontsize=8, color='black')
+        plt.xticks(x, activations)
+        plt.xlabel('activation')
+        plt.ylabel(ylabel)
+        plt.legend()
+        plt.grid(axis='y', alpha=0.25)
+        plt.tight_layout()
+        plt.savefig(outpath, dpi=300)
+        plt.close()
+
+    in_mean_arr = np.array(in_mean_list)
+    inter_mean_arr = np.array(inter_mean_list)
+    in_max_mean_arr = np.array(in_max_mean_list)
+    inter_max_mean_arr = np.array(inter_max_mean_list)
+    in_max_ratio_arr = np.array(in_max_ratio_list)
+    inter_max_ratio_arr = np.array(inter_max_ratio_list)
+
+    draw_lollipop_single(x, inter_mean_arr, in_mean_arr, activations, 'Mean Similarity', 'Mean Similarity', 'expert_feature_similarity_mean_lollipop.png')
+    draw_lollipop_single(x, inter_max_mean_arr, in_max_mean_arr, activations, 'Max Similarity', 'Mean Similarity', 'expert_feature_similarity_max_mean_lollipop.png')
+    draw_lollipop_single(x, inter_max_ratio_arr, in_max_ratio_arr, activations, 'Ratio', 'Ratio', 'expert_feature_similarity_max_mean_ratio_lollipop.png')
+
+    width = 0.35
+    # mean bar
+    plt.figure(figsize=(8,5))
+    plt.bar(x - width/2, in_mean_list, width, label='in-expert', color='C0')
+    plt.bar(x + width/2, inter_mean_list, width, label='inter-expert', color='C1')
+    plt.xticks(x, activations)
+    plt.xlabel('activation')
+    plt.ylabel('Mean Similairty')
+    plt.legend()
+    plt.grid(True, axis='y', alpha=0.3)
+    plt.tight_layout()
+    plt.savefig('expert_feature_similarity_mean_bar.png', dpi=300)
+    plt.close()
+    # max mean bar
+    plt.figure(figsize=(8,5))
+    plt.bar(x - width/2, in_max_mean_list, width, label='in-expert', color='C0')
+    plt.bar(x + width/2, inter_max_mean_list, width, label='inter-expert', color='C1')
+    plt.xticks(x, activations)
+    plt.xlabel('activation')
+    plt.ylabel('Max Similarity')
+    plt.legend()
+    plt.grid(True, axis='y', alpha=0.3)
+    plt.tight_layout()
+    plt.savefig('expert_feature_similarity_max_mean_bar.png', dpi=300)
+    plt.close()
+    # max mean>0.9 ratio bar
+    plt.figure(figsize=(8,5))
+    plt.bar(x - width/2, in_max_ratio_list, width, label='in-expert', color='C0')
+    plt.bar(x + width/2, inter_max_ratio_list, width, label='inter-expert', color='C1')
+    plt.xticks(x, activations)
+    plt.xlabel('activation')
+    plt.ylabel('Ratio')
+    plt.legend()
+    plt.grid(True, axis='y', alpha=0.3)
+    plt.tight_layout()
+    plt.savefig('expert_feature_similarity_max_mean_ratio_bar.png', dpi=300)
+    plt.close()
+
+    # write results to CSV
+    csv_path = 'expert_feature_similarity_results.csv'
+    with open(csv_path, 'w', newline='') as csvfile:
+        writer = csv.writer(csvfile)
+        writer.writerow(['activation', 'metric', 'in_expert', 'inter_expert', 'delta'])
+        for i, act in enumerate(activations):
+            writer.writerow([act, 'mean', float(in_mean_list[i]), float(inter_mean_list[i]), float(in_mean_list[i] - inter_mean_list[i])])
+            writer.writerow([act, 'max_mean', float(in_max_mean_list[i]), float(inter_max_mean_list[i]), float(in_max_mean_list[i] - inter_max_mean_list[i])])
+            writer.writerow([act, 'max_mean_ratio', float(in_max_ratio_list[i]), float(inter_max_ratio_list[i]), float(in_max_ratio_list[i] - inter_max_ratio_list[i])])
+
+    print(f'Lollipop plots saved and CSV written to {csv_path}')
+
 if __name__ == "__main__":
     main()

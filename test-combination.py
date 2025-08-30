@@ -18,14 +18,14 @@ import matplotlib.pyplot as plt
 
 GPU = "0"
 LAYER = 8
-E = 2
+E = 16
 # Optional explicit paths; if None, we'll auto-discover from dictionaries/
 SCALE_MODEL_PATH: Optional[str] = f"dictionaries/MultiExpert_Scale_64_{E}/{LAYER}.pt"
 PLAIN_MODEL_PATH: Optional[str] = f"dictionaries/MultiExpert_64_{E}/{LAYER}.pt"
 
 OUTPUT_ROOT = f"feature_combo_overlap_both_{E}"
 
-TOP_N_FEATURES = 16
+TOP_N_FEATURES = 4
 NUM_PAST_VERBS = 1500
 SEED = 0
 
@@ -634,6 +634,58 @@ def analyze():
         title=f'Overall top-{TOP_N_FEATURES} overlap distribution (both)',
         path=os.path.join(OUTPUT_ROOT, f'overall_overlap_top{TOP_N_FEATURES}_both.png'),
     )
+
+    def plot_cdf_overlay(hist_a, hist_b, labels, title, path):
+        # normalize to proportions then compute CDFs
+        import numpy as _np
+        la = _np.array(hist_a, dtype=float)
+        lb = _np.array(hist_b, dtype=float)
+        xs = list(range(max(len(la), len(lb))))
+        ya = _np.pad(la, (0, max(0, len(xs) - len(la))), constant_values=0.0)
+        yb = _np.pad(lb, (0, max(0, len(xs) - len(lb))), constant_values=0.0)
+        sa = float(_np.sum(ya))
+        sb = float(_np.sum(yb))
+        pa = ya / sa if sa > 0 else _np.zeros_like(ya)
+        pb = yb / sb if sb > 0 else _np.zeros_like(yb)
+        cdfa = _np.cumsum(pa)
+        cdfb = _np.cumsum(pb)
+        # prepend zero so step plot starts at 0
+        cdfa = _np.concatenate((_np.array([0.0]), cdfa))
+        cdfb = _np.concatenate((_np.array([0.0]), cdfb))
+        xstep = _np.arange(len(cdfa))
+        plt.figure(figsize=(6.8, 4.4))
+        plt.step(xstep, cdfa, where='pre', color='tab:blue', label=labels[0], linewidth=2)
+        plt.step(xstep, cdfb, where='pre', color='tab:orange', label=labels[1], linewidth=2)
+        plt.xlim(0, max(xstep))
+        plt.ylim(0, 1)
+        plt.xlabel(f'Overlap count (0..{TOP_N_FEATURES})')
+        plt.ylabel('CDF')
+        plt.title(title)
+        plt.grid(True, axis='y', alpha=0.3)
+        plt.legend()
+        plt.tight_layout()
+        plt.savefig(path, dpi=200)
+        plt.close()
+
+    plot_cdf_overlay(
+        overall_hist_scale,
+        overall_hist_plain,
+        labels=("Scale", "Plain"),
+        title=f'Overall top-{TOP_N_FEATURES} overlap CDF (both)',
+        path=os.path.join(OUTPUT_ROOT, f'overall_overlap_top{TOP_N_FEATURES}_both_cdf.png'),
+    )
+
+    # Compute and print average overlap counts for both variants
+    def _avg_from_hist(hist: List[int]) -> float:
+        total = sum(hist)
+        if total == 0:
+            return 0.0
+        return float(sum(i * c for i, c in enumerate(hist)) / total)
+
+    avg_scale = _avg_from_hist(overall_hist_scale)
+    avg_plain = _avg_from_hist(overall_hist_plain)
+    print(f"Average overlap count (Scale): {avg_scale:.6f}")
+    print(f"Average overlap count (Plain): {avg_plain:.6f}")
 
 
     
