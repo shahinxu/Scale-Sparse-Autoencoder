@@ -133,7 +133,7 @@ def llama_cpp_generate(model_path, prompt, max_tokens=256, temperature=0.0):
     return str(out)
 
 
-def transformers_generate(model_path, prompt, max_new_tokens=256, temperature=0.0, force_cpu=False):
+def transformers_generate(model_path, prompt, max_new_tokens=256, temperature=0.0, force_cpu=False, use_8bit=False):
     try:
         from transformers import AutoModelForCausalLM, AutoTokenizer
         import torch
@@ -149,11 +149,24 @@ def transformers_generate(model_path, prompt, max_new_tokens=256, temperature=0.
         if force_cpu:
             model = AutoModelForCausalLM.from_pretrained(model_path, device_map={'': 'cpu'}, torch_dtype=torch.float32, **load_kwargs)
         else:
-            # prefer fp16 when CUDA is available
-            if torch.cuda.is_available():
-                model = AutoModelForCausalLM.from_pretrained(model_path, device_map='auto', torch_dtype=torch.float16, **load_kwargs)
+            # prefer 8-bit when requested and available
+            # use_8bit is passed as an explicit parameter
+            if use_8bit:
+                try:
+                    import bitsandbytes as bnb  # noqa: F401
+                    model = AutoModelForCausalLM.from_pretrained(model_path, load_in_8bit=True, device_map='auto', **load_kwargs)
+                except Exception as e8:
+                    print('bitsandbytes 8-bit load failed, falling back to fp16 load:', e8)
+                    if torch.cuda.is_available():
+                        model = AutoModelForCausalLM.from_pretrained(model_path, device_map='auto', torch_dtype=torch.float16, **load_kwargs)
+                    else:
+                        model = AutoModelForCausalLM.from_pretrained(model_path, **load_kwargs)
             else:
-                model = AutoModelForCausalLM.from_pretrained(model_path, **load_kwargs)
+                # prefer fp16 when CUDA is available
+                if torch.cuda.is_available():
+                    model = AutoModelForCausalLM.from_pretrained(model_path, device_map='auto', torch_dtype=torch.float16, **load_kwargs)
+                else:
+                    model = AutoModelForCausalLM.from_pretrained(model_path, **load_kwargs)
     except Exception as e:
         # fallback: try CPU-only load
         try:
@@ -239,6 +252,7 @@ def main():
     p.add_argument('--sample', type=int, default=0, help='process only a random sample of this many features')
     p.add_argument('--force-cpu', action='store_true', help='force transformers backend to run on CPU to avoid CUDA memory issues')
     p.add_argument('--max-new-tokens', type=int, default=32, help='max new tokens to generate per feature (keeps generation short)')
+    p.add_argument('--use-8bit', action='store_true', help='use bitsandbytes 8-bit loading when available to reduce GPU memory')
     args = p.parse_args()
 
     features = find_feature_files(args.features_root)
@@ -286,7 +300,7 @@ def main():
                     if args.backend == 'llama_cpp':
                         text = llama_cpp_generate(args.model_path, prompt, max_tokens=max_toks, temperature=0.0)
                     else:
-                        text = transformers_generate(args.model_path, prompt, max_new_tokens=max_toks, temperature=0.0, force_cpu=args.force_cpu)
+                        text = transformers_generate(args.model_path, prompt, max_new_tokens=max_toks, temperature=0.0, force_cpu=args.force_cpu, use_8bit=args.use_8bit)
                 except Exception as e:
                     print(f'LLM generation failed for {fp}: {e}')
                     labels = None
@@ -302,7 +316,7 @@ def main():
                         if args.backend == 'llama_cpp':
                             text2 = llama_cpp_generate(args.model_path, alt_prompt, max_tokens=args.max_new_tokens, temperature=0.0)
                         else:
-                            text2 = transformers_generate(args.model_path, alt_prompt, max_new_tokens=args.max_new_tokens, temperature=0.0, force_cpu=args.force_cpu)
+                            text2 = transformers_generate(args.model_path, alt_prompt, max_new_tokens=args.max_new_tokens, temperature=0.0, force_cpu=args.force_cpu, use_8bit=args.use_8bit)
                         parsed = parse_response_text(text2, len(tokens))
                     except Exception:
                         parsed = None

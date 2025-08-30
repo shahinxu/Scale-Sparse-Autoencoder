@@ -170,7 +170,7 @@ switch
 # plots
 plots
 *.png
-
+*.csv
 # data
 data
 
