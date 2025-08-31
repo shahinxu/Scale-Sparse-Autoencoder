@@ -10,7 +10,17 @@ import os
 import re
 import json
 
+# Global plotting style (larger text)
+plt.rcParams.update({
+    'font.size': 24,
+    'axes.labelsize': 24,
+    'xtick.labelsize': 22,
+    'ytick.labelsize': 22,
+    'legend.fontsize': 22,
+})
 
+
+# --------- 配置区 ---------
 GPU = "0"
 EXPERTS = 64
 LAYER = 8
@@ -20,9 +30,17 @@ K = 32
 E_1 = 1
 E_2 = 2
 MODEL_A_TYPE = "plain"  # "plain" or "scale"
-MODEL_B_TYPE = "plain"
+MODEL_B_TYPE = "plain"  # "plain" or "scale"
 MODEL_A_PATH = f"dictionaries/MultiExpert_Scale_64_{E_1}/{LAYER}.pt" if MODEL_A_TYPE == "scale" else f"dictionaries/MultiExpert_64_{E_1}/{LAYER}.pt"
 MODEL_B_PATH = f"dictionaries/MultiExpert_Scale_64_{E_2}/{LAYER}.pt" if MODEL_B_TYPE == "scale" else f"dictionaries/MultiExpert_64_{E_2}/{LAYER}.pt"
+
+# Optional extra models C and D for four-model comparison
+E_3 = 4
+E_4 = 8
+MODEL_C_TYPE = "plain"  # "plain" or "scale"
+MODEL_D_TYPE = "plain"  # "plain" or "scale"
+MODEL_C_PATH = f"dictionaries/MultiExpert_Scale_64_{E_3}/{LAYER}.pt" if MODEL_C_TYPE == "scale" else f"dictionaries/MultiExpert_64_{E_3}/{LAYER}.pt"
+MODEL_D_PATH = f"dictionaries/MultiExpert_Scale_64_{E_4}/{LAYER}.pt" if MODEL_D_TYPE == "scale" else f"dictionaries/MultiExpert_64_{E_4}/{LAYER}.pt"
 
 
 OUTPUT_ROOT = f"expert_usage_compare_exp{EXPERTS}_L{LAYER}"
@@ -374,32 +392,117 @@ def main():
     print("Loading LM and tokenizer...")
     model = LanguageModel(lm, dispatch=True, device_map=device)
     tokenizer = AutoTokenizer.from_pretrained(lm)
-    # Compare multiple scale models: MultiExpert_Scale_64_{1,2,4,8}
-    E_list = [1, 2, 4, 8]
-    model_results = []  # list of (e, usage_dict, info)
 
-    for e in E_list:
-        print(f"Loading MultiExpert_Scale_64_{e}...")
-        ae = MultiExpertScaleAutoEncoder(
+    # 加载模型A
+    if MODEL_A_TYPE == "scale":
+        aeA = MultiExpertScaleAutoEncoder(
             activation_dim=ACT_DIM,
             dict_size=DICT_SIZE,
             k=K,
             experts=EXPERTS,
-            e=e,
+            e=E_1,
             heaviside=False
         )
-        model_path = f"dictionaries/MultiExpert_Scale_64_{e}/{LAYER}.pt"
-        ae.load_state_dict(t.load(model_path))
-        ae.to(device)
-        ae.eval()
-        info = detect_model_type(ae)
-        model_results.append((e, ae, info))
+    else:
+        aeA = MultiExpertAutoEncoder(
+            activation_dim=ACT_DIM,
+            dict_size=DICT_SIZE,
+            k=K,
+            experts=EXPERTS,
+            e=E_1,
+            heaviside=False
+        )
+    aeA.load_state_dict(t.load(MODEL_A_PATH))
+    aeA.to(device)
+    aeA.eval()
+    infoA = detect_model_type(aeA)
+
+    # 加载模型B
+    if MODEL_B_TYPE == "scale":
+        aeB = MultiExpertScaleAutoEncoder(
+            activation_dim=ACT_DIM,
+            dict_size=DICT_SIZE,
+            k=K,
+            experts=EXPERTS,
+            e=E_2,
+            heaviside=False
+        )
+    else:
+        aeB = MultiExpertAutoEncoder(
+            activation_dim=ACT_DIM,
+            dict_size=DICT_SIZE,
+            k=K,
+            experts=EXPERTS,
+            e=E_2,
+            heaviside=False
+        )
+    aeB.load_state_dict(t.load(MODEL_B_PATH))
+    aeB.to(device)
+    aeB.eval()
+    infoB = detect_model_type(aeB)
+
+    # 加载模型C（可选）
+    if MODEL_C_TYPE == "scale":
+        aeC = MultiExpertScaleAutoEncoder(
+            activation_dim=ACT_DIM,
+            dict_size=DICT_SIZE,
+            k=K,
+            experts=EXPERTS,
+            e=E_3,
+            heaviside=False
+        )
+    else:
+        aeC = MultiExpertAutoEncoder(
+            activation_dim=ACT_DIM,
+            dict_size=DICT_SIZE,
+            k=K,
+            experts=EXPERTS,
+            e=E_3,
+            heaviside=False
+        )
+    aeC.load_state_dict(t.load(MODEL_C_PATH))
+    aeC.to(device)
+    aeC.eval()
+    infoC = detect_model_type(aeC)
+
+    # 加载模型D（可选）
+    if MODEL_D_TYPE == "scale":
+        aeD = MultiExpertScaleAutoEncoder(
+            activation_dim=ACT_DIM,
+            dict_size=DICT_SIZE,
+            k=K,
+            experts=EXPERTS,
+            e=E_4,
+            heaviside=False
+        )
+    else:
+        aeD = MultiExpertAutoEncoder(
+            activation_dim=ACT_DIM,
+            dict_size=DICT_SIZE,
+            k=K,
+            experts=EXPERTS,
+            e=E_4,
+            heaviside=False
+        )
+    aeD.load_state_dict(t.load(MODEL_D_PATH))
+    aeD.to(device)
+    aeD.eval()
+    infoD = detect_model_type(aeD)
 
     # 只分析verbs_past类别
     category_name = 'verbs_past'
     tokens = TOKEN_CATEGORIES[category_name]
     print(f"Analyzing {category_name} ({len(tokens)} tokens)...")
-    analyzer_results = {}
+
+    analyzerA = TokenExpertAnalyzer(model, aeA, tokenizer, infoA, device)
+    analyzerB = TokenExpertAnalyzer(model, aeB, tokenizer, infoB, device)
+    analyzerC = TokenExpertAnalyzer(model, aeC, tokenizer, infoC, device)
+    analyzerD = TokenExpertAnalyzer(model, aeD, tokenizer, infoD, device)
+
+    resultsA = analyze_token_category(analyzerA, category_name, tokens, top_n_features, max_tokens_per_category)
+    resultsB = analyze_token_category(analyzerB, category_name, tokens, top_n_features, max_tokens_per_category)
+    resultsC = analyze_token_category(analyzerC, category_name, tokens, top_n_features, max_tokens_per_category)
+    resultsD = analyze_token_category(analyzerD, category_name, tokens, top_n_features, max_tokens_per_category)
 
     def get_expert_usage(results):
         expert_usage_count = defaultdict(int)
@@ -407,6 +510,11 @@ def main():
             for expert_id in result['expert_activations'].keys():
                 expert_usage_count[expert_id] += 1
         return expert_usage_count
+
+    usageA = get_expert_usage(resultsA)
+    usageB = get_expert_usage(resultsB)
+    usageC = get_expert_usage(resultsC)
+    usageD = get_expert_usage(resultsD)
 
     def get_sorted_expert_density(usage):
         items = sorted(usage.items(), key=lambda x: x[1], reverse=True)
@@ -416,22 +524,32 @@ def main():
         density = [c / total if total > 0 else 0.0 for c in counts]
         return ids, density
 
-    # Analyze each model (may be GPU-heavy)
-    densities = []
-    labels = []
-    for e, ae, info in model_results:
-        analyzer = TokenExpertAnalyzer(model, ae, tokenizer, info, device)
-        results = analyze_token_category(analyzer, category_name, tokens, top_n_features, max_tokens_per_category)
-        usage = get_expert_usage(results)
-        ids, density = get_sorted_expert_density(usage)
-        densities.append(density)
-        labels.append(f"Expert {e}")
+    idsA, densityA = get_sorted_expert_density(usageA)
+    idsB, densityB = get_sorted_expert_density(usageB)
+    idsC, densityC = get_sorted_expert_density(usageC)
+    idsD, densityD = get_sorted_expert_density(usageD)
 
-    # CDF plot: align densities to same length by padding with zeros
+    # 柱状图（重叠）
+    bw = 1.0
+    plt.figure(figsize=(8, 5))
+    xA = range(len(densityA))
+    xB = range(len(densityB))
+    plt.bar(xA, densityA, width=bw, color='tab:blue', alpha=0.6, label=f"Expert {E_1}", align='center')
+    plt.bar(xB, densityB, width=bw, color='tab:orange', alpha=0.6, label=f"Expert {E_2}", align='center')
+    plt.xlabel('Expert (sorted by own usage, position index)')
+    plt.ylabel('Proportion of tokens')
+    # Title removed per request
+    plt.grid(True, axis='y', alpha=0.3)
+    plt.legend()
+    plt.tight_layout()
+    fname_bar = f"{MODEL_A_TYPE[:2]}_{MODEL_B_TYPE[:2]}_{E_1}_{E_2}_bar.png"
+    output_file_bar = os.path.join(OUTPUT_ROOT, fname_bar)
+    plt.savefig(output_file_bar, dpi=300, bbox_inches='tight')
+    plt.close()
+    print(f"Bar plot saved to {output_file_bar}")
+
+    # CDF阶梯图
     import numpy as np
-    max_len = max((len(d) for d in densities), default=0)
-    padded = [d + [0.0] * (max_len - len(d)) for d in densities]
-
     def get_cdf_full(density):
         cdf = np.cumsum(density)
         cdf = np.concatenate([[0], cdf])
@@ -440,25 +558,83 @@ def main():
             cdf[-1] = 1.0
         return x, cdf
 
-    # Plot styling per request
-    plt.rcParams.update({'font.size': 14})
-    plt.figure(figsize=(8, 5))
-    colors = ['tab:blue', 'tab:orange', 'tab:green', 'tab:red']
-    for i, density in enumerate(padded):
-        x_cdf, cdf = get_cdf_full(np.array(density))
-        plt.step(x_cdf, cdf, where='pre', color=colors[i % len(colors)], label=labels[i], linewidth=3)
+    xA_cdf, cdfA = get_cdf_full(densityA)
+    xB_cdf, cdfB = get_cdf_full(densityB)
 
+    plt.figure(figsize=(8, 5))
+    plt.step(xA_cdf, cdfA, where='pre', color='tab:blue', label=f"Expert {E_1}", linewidth=3)
+    plt.step(xB_cdf, cdfB, where='pre', color='tab:orange', label=f"Expert {E_2}", linewidth=3)
     plt.xlabel('Expert Rank')
     plt.ylabel('CDF')
     plt.ylim(0, 1)
     plt.grid(True, axis='y', alpha=0.3)
-    plt.legend(title=None, fontsize=12)
+    plt.legend()
     plt.tight_layout()
-    fname_cdf = f"MultiExpert_Scale_64_{'_'.join(str(e) for e in E_list)}_cdf.png"
+    fname_cdf = f"{MODEL_A_TYPE[:2]}_{MODEL_B_TYPE[:2]}_{E_1}_{E_2}_cdf.png"
     output_file_cdf = os.path.join(OUTPUT_ROOT, fname_cdf)
     plt.savefig(output_file_cdf, dpi=300, bbox_inches='tight')
     plt.close()
     print(f"CDF plot saved to {output_file_cdf}")
+
+    # 四模型叠加 CDF（A/B/C/D）
+    import numpy as np
+    max_len = max(len(densityA), len(densityB), len(densityC), len(densityD))
+    def pad(d, L):
+        return d + [0.0] * (L - len(d))
+    dA = pad(densityA, max_len)
+    dB = pad(densityB, max_len)
+    dC = pad(densityC, max_len)
+    dD = pad(densityD, max_len)
+
+    xA4, cA = get_cdf_full(dA)
+    xB4, cB = get_cdf_full(dB)
+    xC4, cC = get_cdf_full(dC)
+    xD4, cD = get_cdf_full(dD)
+
+    plt.figure(figsize=(8, 5))
+    plt.step(xA4, cA, where='pre', color='tab:blue', label=f"Expert {E_1}", linewidth=3)
+    plt.step(xB4, cB, where='pre', color='tab:orange', label=f"Expert {E_2}", linewidth=3)
+    plt.step(xC4, cC, where='pre', color='tab:green', label=f"Expert {E_3}", linewidth=3)
+    plt.step(xD4, cD, where='pre', color='tab:red', label=f"Expert {E_4}", linewidth=3)
+    plt.xlabel('Expert Rank')
+    plt.ylabel('CDF')
+    plt.ylim(0, 1)
+    plt.grid(True, axis='y', alpha=0.3)
+    plt.legend()
+    plt.tight_layout()
+    # 文件名：{A}{B}{C}{D}{E1}{E2}{E3}_{E4}_cdf.png
+    typeA = MODEL_A_TYPE[:2]
+    typeB = MODEL_B_TYPE[:2]
+    typeC = MODEL_C_TYPE[:2]
+    typeD = MODEL_D_TYPE[:2]
+    fname_cdf4 = f"{typeA}_{typeB}_{typeC}_{typeD}_{E_1}_{E_2}_{E_3}_{E_4}_cdf.png"
+    output_file_cdf4 = os.path.join(OUTPUT_ROOT, fname_cdf4)
+    plt.savefig(output_file_cdf4, dpi=300, bbox_inches='tight')
+    plt.close()
+    print(f"4-model CDF plot saved to {output_file_cdf4}")
+
+    # 四模型叠加 柱状图（A/B/C/D）
+    plt.figure(figsize=(8, 5))
+    bw = 1.0
+    xA4 = range(len(densityA))
+    xB4 = range(len(densityB))
+    xC4 = range(len(densityC))
+    xD4 = range(len(densityD))
+    plt.bar(xA4, densityA, width=bw, color='tab:blue', alpha=0.5, label=f"Expert {E_1}", align='center')
+    plt.bar(xB4, densityB, width=bw, color='tab:orange', alpha=0.5, label=f"Expert {E_2}", align='center')
+    plt.bar(xC4, densityC, width=bw, color='tab:green', alpha=0.5, label=f"Expert {E_3}", align='center')
+    plt.bar(xD4, densityD, width=bw, color='tab:red', alpha=0.5, label=f"Expert {E_4}", align='center')
+    plt.xlabel('Expert (sorted by own usage, position index)')
+    plt.ylabel('Proportion of tokens')
+    plt.grid(True, axis='y', alpha=0.3)
+    plt.legend()
+    plt.tight_layout()
+    # 文件名：{A}{B}{C}{D}{E1}{E2}{E3}_{E4}_bar.png
+    fname_bar4 = f"{typeA}_{typeB}_{typeC}_{typeD}_{E_1}_{E_2}_{E_3}_{E_4}_bar.png"
+    output_file_bar4 = os.path.join(OUTPUT_ROOT, fname_bar4)
+    plt.savefig(output_file_bar4, dpi=300, bbox_inches='tight')
+    plt.close()
+    print(f"4-model BAR plot saved to {output_file_bar4}")
 
 if __name__ == "__main__":
     main()

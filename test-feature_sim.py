@@ -7,6 +7,15 @@ import csv
 
 GPU = "5"
 
+# Global plotting style (match plot_multi_expert.py)
+plt.rcParams.update({
+    'font.size': 24,
+    'axes.labelsize': 24,
+    'xtick.labelsize': 22,
+    'ytick.labelsize': 22,
+    'legend.fontsize': 22,
+})
+
 
 def compute_in_expert_metrics(dictionary, device="cpu"):
     expert_modules = dictionary.expert_modules
@@ -96,19 +105,19 @@ def main():
     def draw_lollipop_single(x, inter_vals, in_vals, activations, title, ylabel, outpath):
         plt.figure(figsize=(8,5))
         for xi, inter_v, in_v in zip(x, inter_vals, in_vals):
-            plt.plot([xi, xi], [inter_v, in_v], color='gray', linewidth=2, zorder=1)
-            plt.scatter(xi, inter_v, color='C1', s=80, zorder=2, label='inter-expert' if xi==0 else '')
-            plt.scatter(xi, in_v, color='C0', s=80, zorder=3, label='in-expert' if xi==0 else '')
+            plt.plot([xi, xi], [inter_v, in_v], color='gray', linewidth=3, zorder=1)
+            plt.scatter(xi, inter_v, color='C1', s=100, zorder=2, label='inter-expert' if xi==0 else '')
+            plt.scatter(xi, in_v, color='C0', s=100, zorder=3, label='in-expert' if xi==0 else '')
             delta = in_v - inter_v
             y_annot = max(inter_v, in_v) + 0.01 * (abs(max(inter_vals.max(), in_vals.max())) + 1e-8)
-            plt.text(xi, y_annot, f'{delta:.3f}', ha='center', va='bottom', fontsize=8, color='black')
+            plt.text(xi, y_annot, f'{delta:.3f}', ha='center', va='bottom', fontsize=12, color='black')
         plt.xticks(x, activations)
         plt.xlabel('activation')
         plt.ylabel(ylabel)
         plt.legend()
-        plt.grid(axis='y', alpha=0.25)
+        plt.grid(axis='y', alpha=0.3)
         plt.tight_layout()
-        plt.savefig(outpath, dpi=300)
+        plt.savefig(outpath, dpi=300, bbox_inches='tight')
         plt.close()
 
     in_mean_arr = np.array(in_mean_list)
@@ -133,7 +142,7 @@ def main():
     plt.legend()
     plt.grid(True, axis='y', alpha=0.3)
     plt.tight_layout()
-    plt.savefig('expert_feature_similarity_mean_bar.png', dpi=300)
+    plt.savefig('expert_feature_similarity_mean_bar.png', dpi=300, bbox_inches='tight')
     plt.close()
     # max mean bar
     plt.figure(figsize=(8,5))
@@ -145,7 +154,7 @@ def main():
     plt.legend()
     plt.grid(True, axis='y', alpha=0.3)
     plt.tight_layout()
-    plt.savefig('expert_feature_similarity_max_mean_bar.png', dpi=300)
+    plt.savefig('expert_feature_similarity_max_mean_bar.png', dpi=300, bbox_inches='tight')
     plt.close()
     # max mean>0.9 ratio bar
     plt.figure(figsize=(8,5))
@@ -157,7 +166,7 @@ def main():
     plt.legend()
     plt.grid(True, axis='y', alpha=0.3)
     plt.tight_layout()
-    plt.savefig('expert_feature_similarity_max_mean_ratio_bar.png', dpi=300)
+    plt.savefig('expert_feature_similarity_max_mean_ratio_bar.png', dpi=300, bbox_inches='tight')
     plt.close()
 
     # write results to CSV
