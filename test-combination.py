@@ -16,18 +16,29 @@ from dictionary_learning.trainers.moe_physically import MultiExpertAutoEncoder
 from config import lm
 import matplotlib.pyplot as plt
 
+# Global plotting style to match plot_multi_expert.py
+plt.rcParams.update({
+    'font.size': 24,
+    'axes.labelsize': 24,
+    'xtick.labelsize': 22,
+    'ytick.labelsize': 22,
+    'legend.fontsize': 22,
+})
+
 GPU = "0"
 LAYER = 8
-E = 16
+E = 2
+k = 32
 # Optional explicit paths; if None, we'll auto-discover from dictionaries/
-SCALE_MODEL_PATH: Optional[str] = f"dictionaries/MultiExpert_Scale_64_{E}/{LAYER}.pt"
-PLAIN_MODEL_PATH: Optional[str] = f"dictionaries/MultiExpert_64_{E}/{LAYER}.pt"
+SCALE_MODEL_PATH: Optional[str] = f"dictionaries/MultiExpert_Scale_{k}_64_{E}/{LAYER}.pt"
+PLAIN_MODEL_PATH: Optional[str] = f"dictionaries/MultiExpert_{k}_64_{E}/{LAYER}.pt"
 
 OUTPUT_ROOT = f"feature_combo_overlap_both_{E}"
 
-TOP_N_FEATURES = 4
+TOP_N_FEATURES = 32
 NUM_PAST_VERBS = 1500
 SEED = 0
+XTICK_STEP = 8  # reduce x-axis tick density
 
 
 # DATASET_PATH: Optional[str] = "openwebtext/subsets/urlsf_subset00.tar"
@@ -614,17 +625,17 @@ def analyze():
         pa = [y / sa if sa > 0 else 0.0 for y in ya]
         pb = [y / sb if sb > 0 else 0.0 for y in yb]
         bw = 1
-        plt.figure(figsize=(6.8, 4.4))
-        plt.bar(xs, pa, width=bw, color='tab:blue', alpha=0.5, label=labels[0], align='center')
-        plt.bar(xs, pb, width=bw, color='tab:orange', alpha=0.5, label=labels[1], align='center')
-        plt.xticks(xs, xs)
-        plt.xlabel(f'Overlap count (0..{TOP_N_FEATURES})')
+        plt.figure(figsize=(8, 5))
+        plt.bar(xs, pa, width=bw, color='tab:blue', alpha=0.6, label=labels[0], align='center')
+        plt.bar(xs, pb, width=bw, color='tab:orange', alpha=0.6, label=labels[1], align='center')
+        tick_pos = xs[::max(1, XTICK_STEP)]
+        plt.xticks(tick_pos, tick_pos)
+        plt.xlabel(f'Overlap count')
         plt.ylabel('Proportion of pairs')
-        plt.title(title)
         plt.grid(True, axis='y', alpha=0.3)
         plt.legend()
         plt.tight_layout()
-        plt.savefig(path, dpi=200)
+        plt.savefig(path, dpi=300, bbox_inches='tight')
         plt.close()
 
     plot_hist_overlay(
@@ -653,18 +664,20 @@ def analyze():
         cdfa = _np.concatenate((_np.array([0.0]), cdfa))
         cdfb = _np.concatenate((_np.array([0.0]), cdfb))
         xstep = _np.arange(len(cdfa))
-        plt.figure(figsize=(6.8, 4.4))
-        plt.step(xstep, cdfa, where='pre', color='tab:blue', label=labels[0], linewidth=2)
-        plt.step(xstep, cdfb, where='pre', color='tab:orange', label=labels[1], linewidth=2)
-        plt.xlim(0, max(xstep))
+        plt.figure(figsize=(8, 5))
+        plt.step(xstep, cdfa, where='pre', color='tab:blue', label=labels[0], linewidth=3)
+        plt.step(xstep, cdfb, where='pre', color='tab:orange', label=labels[1], linewidth=3)
+        xmax = int(_np.max(xstep))
+        plt.xlim(0, xmax)
+        tick_pos = _np.arange(0, xmax + 1, max(1, XTICK_STEP))
+        plt.xticks(tick_pos, tick_pos)
         plt.ylim(0, 1)
-        plt.xlabel(f'Overlap count (0..{TOP_N_FEATURES})')
+        plt.xlabel(f'Overlap count')
         plt.ylabel('CDF')
-        plt.title(title)
         plt.grid(True, axis='y', alpha=0.3)
         plt.legend()
         plt.tight_layout()
-        plt.savefig(path, dpi=200)
+        plt.savefig(path, dpi=300, bbox_inches='tight')
         plt.close()
 
     plot_cdf_overlay(

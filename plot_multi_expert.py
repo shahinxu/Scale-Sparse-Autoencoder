@@ -613,7 +613,6 @@ def main():
     plt.close()
     print(f"4-model CDF plot saved to {output_file_cdf4}")
 
-    # 四模型叠加 柱状图（A/B/C/D）
     plt.figure(figsize=(8, 5))
     bw = 1.0
     xA4 = range(len(densityA))
@@ -629,7 +628,6 @@ def main():
     plt.grid(True, axis='y', alpha=0.3)
     plt.legend()
     plt.tight_layout()
-    # 文件名：{A}{B}{C}{D}{E1}{E2}{E3}_{E4}_bar.png
     fname_bar4 = f"{typeA}_{typeB}_{typeC}_{typeD}_{E_1}_{E_2}_{E_3}_{E_4}_bar.png"
     output_file_bar4 = os.path.join(OUTPUT_ROOT, fname_bar4)
     plt.savefig(output_file_bar4, dpi=300, bbox_inches='tight')
