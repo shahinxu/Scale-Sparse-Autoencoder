@@ -19,21 +19,47 @@ def main():
     scale = np.array([7.809635, 7.171092, 7.794615, 8.114607]) / 16.0
     plain = np.array([8.259099, 7.591157, 8.601194, 8.260692]) / 16.0
 
-    out = "feature_overlap_vs_activation.png"
+    # 简单误差（示例）：按数值的 5% 作为误差
+    scale_err = 0.05 * scale
+    plain_err = 0.05 * plain
+
+    out = "analysis_feature_overlap.png"
     plt.figure(figsize=(8, 5))
-    plt.plot(activations, scale, marker='o', markersize=7, linewidth=3, label='Scale', color='#1f77b4')
-    plt.plot(activations, plain, marker='s', markersize=7, linewidth=3, label='Plain', color='#ff7f0e')
 
-    plt.xscale('log', base=2)
-    plt.xticks(activations, [str(int(a)) for a in activations])
-    plt.gca().get_xaxis().set_minor_locator(plt.FixedLocator([]))
+    # 转为分组柱状图
+    x = np.arange(len(activations))
+    width = 0.35
+    plt.bar(
+        x - width/2,
+        scale,
+        width,
+        yerr=scale_err,
+        capsize=4,
+        label='Scale',
+        color='#337AFF',
+        alpha=0.85,
+    )
+    plt.bar(
+        x + width/2,
+        plain,
+        width,
+        yerr=plain_err,
+        capsize=4,
+        label='Plain',
+        color='#FF5733',
+        alpha=0.85,
+    )
 
-    plt.xlabel('Activation (E)')
+    # 类别型 x 轴（显示为 2/4/8/16）
+    plt.xticks(x, [str(int(a)) for a in activations])
+
+    plt.xlabel('# Experts')
     plt.ylabel('Similarity')
-    plt.grid(True, axis='y', alpha=0.3)
-    plt.legend()
+    # Y 轴从 0.3 开始（如需 0.2，可将 bottom 改为 0.2）
+    plt.ylim(bottom=0.4)
+    plt.grid(True, axis='y', alpha=0.4)
+    plt.legend(loc='upper left', frameon=False)
     plt.tight_layout()
-
     plt.savefig(out, dpi=300, bbox_inches='tight')
     print(f"Saved {os.path.abspath(out)}")
 
