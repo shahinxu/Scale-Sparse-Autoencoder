@@ -7,7 +7,6 @@ import csv
 
 GPU = "5"
 
-# Global plotting style (match plot_multi_expert.py)
 plt.rcParams.update({
     'font.size': 24,
     'axes.labelsize': 24,
@@ -78,7 +77,7 @@ def main():
     inter_max_ratio_list = []
 
     for activation in activations:
-        MODEL = f"MultiExpert_64_{activation}"
+        MODEL = f"MultiExpert_32_64_{activation}"
         MODEL_PATH = f"/home/xuzhen/switch_sae/dictionaries/{MODEL}/8.pt"
         ae = MultiExpertAutoEncoder(
             activation_dim=768,
@@ -133,40 +132,40 @@ def main():
 
     width = 0.35
     # mean bar
-    plt.figure(figsize=(8,5))
-    plt.bar(x - width/2, in_mean_list, width, label='in-expert', color='C0')
-    plt.bar(x + width/2, inter_mean_list, width, label='inter-expert', color='C1')
-    plt.xticks(x, activations)
-    plt.xlabel('activation')
-    plt.ylabel('Mean Similairty')
-    plt.legend()
-    plt.grid(True, axis='y', alpha=0.3)
-    plt.tight_layout()
-    plt.savefig('expert_feature_similarity_mean_bar.png', dpi=300, bbox_inches='tight')
-    plt.close()
-    # max mean bar
-    plt.figure(figsize=(8,5))
-    plt.bar(x - width/2, in_max_mean_list, width, label='in-expert', color='C0')
-    plt.bar(x + width/2, inter_max_mean_list, width, label='inter-expert', color='C1')
-    plt.xticks(x, activations)
-    plt.xlabel('activation')
-    plt.ylabel('Max Similarity')
-    plt.legend()
-    plt.grid(True, axis='y', alpha=0.3)
-    plt.tight_layout()
-    plt.savefig('expert_feature_similarity_max_mean_bar.png', dpi=300, bbox_inches='tight')
-    plt.close()
+    # plt.figure(figsize=(8,5))
+    # plt.bar(x - width/2, in_mean_list, width, label='in-expert', color='C0')
+    # plt.bar(x + width/2, inter_mean_list, width, label='inter-expert', color='C1')
+    # plt.xticks(x, activations)
+    # plt.xlabel('# Experts')
+    # plt.ylabel('Mean Similairty')
+    # plt.legend()
+    # plt.grid(True, axis='y', alpha=0.3)
+    # plt.tight_layout()
+    # plt.savefig('expert_feature_similarity_mean_bar.png', dpi=300, bbox_inches='tight')
+    # plt.close()
+    # # max mean bar
+    # plt.figure(figsize=(8,5))
+    # plt.bar(x - width/2, in_max_mean_list, width, label='in-expert', color='C0')
+    # plt.bar(x + width/2, inter_max_mean_list, width, label='inter-expert', color='C1')
+    # plt.xticks(x, activations)
+    # plt.xlabel('# Experts')
+    # plt.ylabel('Max Similarity')
+    # plt.legend()
+    # plt.grid(True, axis='y', alpha=0.3)
+    # plt.tight_layout()
+    # plt.savefig('expert_feature_similarity_max_mean_bar.png', dpi=300, bbox_inches='tight')
+    # plt.close()
     # max mean>0.9 ratio bar
     plt.figure(figsize=(8,5))
-    plt.bar(x - width/2, in_max_ratio_list, width, label='in-expert', color='C0')
-    plt.bar(x + width/2, inter_max_ratio_list, width, label='inter-expert', color='C1')
+    plt.bar(x - width/2, in_max_ratio_list, width, label='in-expert', color='#337AFF')
+    plt.bar(x + width/2, inter_max_ratio_list, width, label='inter-expert', color='#FF5733')
     plt.xticks(x, activations)
-    plt.xlabel('activation')
+    plt.xlabel('# Experts')
     plt.ylabel('Ratio')
     plt.legend()
     plt.grid(True, axis='y', alpha=0.3)
     plt.tight_layout()
-    plt.savefig('expert_feature_similarity_max_mean_ratio_bar.png', dpi=300, bbox_inches='tight')
+    plt.savefig('analysis_multi_expert_ratio_bar.png', dpi=300, bbox_inches='tight')
     plt.close()
 
     # write results to CSV

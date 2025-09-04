@@ -1,21 +1,16 @@
-import os
-import json
-import math
-import random
-import re
-from collections import Counter, defaultdict
-import csv
-from typing import Dict, List, Optional, Sequence, Tuple
-
 import torch as t
 from nnsight import LanguageModel
-from transformers import AutoTokenizer
-
-from dictionary_learning.trainers.moe_physically_scale import MultiExpertScaleAutoEncoder
 from dictionary_learning.trainers.moe_physically import MultiExpertAutoEncoder
-from config import lm
+from dictionary_learning.trainers.moe_physically_scale import MultiExpertScaleAutoEncoder
 import matplotlib.pyplot as plt
+from transformers import AutoTokenizer
+from config import lm, layer
+from collections import defaultdict
+import os
+import re
+import json
 
+# Global plotting style (larger text)
 plt.rcParams.update({
     'font.size': 24,
     'axes.labelsize': 24,
@@ -24,93 +19,58 @@ plt.rcParams.update({
     'legend.fontsize': 22,
 })
 
+
+# --------- 配置区 ---------
 GPU = "0"
+EXPERTS = 64
 LAYER = 8
-E = 2
-k = 32
-SCALE_MODEL_PATH: Optional[str] = f"dictionaries/MultiExpert_Scale_{k}_64_{E}/{LAYER}.pt"
-PLAIN_MODEL_PATH: Optional[str] = f"dictionaries/MultiExpert_{k}_64_{E}/{LAYER}.pt"
+ACT_DIM = 768
+DICT_SIZE = 32 * 768
+K = 32
+E_1 = 1
+E_2 = 2
+MODEL_A_TYPE = "plain"  # "plain" or "scale"
+MODEL_B_TYPE = "plain"  # "plain" or "scale"
+MODEL_A_PATH = f"dictionaries/MultiExpert_Scale_64_{E_1}/{LAYER}.pt" if MODEL_A_TYPE == "scale" else f"dictionaries/MultiExpert_64_{E_1}/{LAYER}.pt"
+MODEL_B_PATH = f"dictionaries/MultiExpert_Scale_64_{E_2}/{LAYER}.pt" if MODEL_B_TYPE == "scale" else f"dictionaries/MultiExpert_64_{E_2}/{LAYER}.pt"
 
-OUTPUT_ROOT = f"feature_combo_overlap_both_{E}"
+# Optional extra models C and D for four-model comparison
+E_3 = 4
+E_4 = 8
+MODEL_C_TYPE = "plain"  # "plain" or "scale"
+MODEL_D_TYPE = "plain"  # "plain" or "scale"
+MODEL_C_PATH = f"dictionaries/MultiExpert_Scale_64_{E_3}/{LAYER}.pt" if MODEL_C_TYPE == "scale" else f"dictionaries/MultiExpert_64_{E_3}/{LAYER}.pt"
+MODEL_D_PATH = f"dictionaries/MultiExpert_Scale_64_{E_4}/{LAYER}.pt" if MODEL_D_TYPE == "scale" else f"dictionaries/MultiExpert_64_{E_4}/{LAYER}.pt"
 
-TOP_N_FEATURES = 32
-NUM_PAST_VERBS = 1500
-SEED = 0
-XTICK_STEP = 8
 
-DATASET_PATH: Optional[str] =None
+OUTPUT_ROOT = f"expert_usage_compare_exp{EXPERTS}_L{LAYER}"
+os.makedirs(OUTPUT_ROOT, exist_ok=True)
 
-def load_tokens_from_dataset(dataset_path: str, tokenizer, max_tokens: int = 2000) -> List[str]:
-    tokens = set()
-    if dataset_path.endswith('.parquet'):
-        import pandas as pd
-        df = pd.read_parquet(dataset_path)
-        text_col = 'text' if 'text' in df.columns else df.columns[0]
-        for text in df[text_col]:
-            tokens.update(tokenizer.tokenize(str(text)))
-            if len(tokens) >= max_tokens:
-                break
-    elif dataset_path.endswith('.txt') or dataset_path.endswith('.raw'):
-        with open(dataset_path, 'r', encoding='utf-8') as f:
-            for line in f:
-                tokens.update(tokenizer.tokenize(line.strip()))
-                if len(tokens) >= max_tokens:
-                    break
-    elif dataset_path.endswith('.tar'):
-        import tarfile
-        with tarfile.open(dataset_path, 'r') as tar:
-            for member in tar.getmembers():
-                if member.isfile():
-                    f = tar.extractfile(member)
-                    if f:
-                        try:
-                            lines = f.read().decode('utf-8', errors='ignore').splitlines()
-                            for line in lines:
-                                tokens.update(tokenizer.tokenize(line.strip()))
-                                if len(tokens) >= max_tokens:
-                                    break
-                        except Exception:
-                            continue
-                if len(tokens) >= max_tokens:
-                    break
+def sanitize_filename(text):
+    safe_text = re.sub(r'[^\w\s-]', '', text)
+    safe_text = re.sub(r'[-\s]+', '_', safe_text)
+    return safe_text.strip('_')
+
+def detect_model_type(dictionary):
+    if hasattr(dictionary, 'experts') and hasattr(dictionary, 'expert_dict_size'):
+        return {
+            'is_multi_expert': True,
+            'num_experts': dictionary.experts,
+            'expert_dict_size': dictionary.expert_dict_size,
+            'total_dict_size': dictionary.dict_size,
+            'model_type': 'MultiExpert'
+        }
     else:
-        raise ValueError(f"Unsupported dataset file type: {dataset_path}")
-    return list(tokens)[:max_tokens]
+        return {
+            'is_multi_expert': False,
+            'num_experts': 1,
+            'expert_dict_size': dictionary.dict_size,
+            'total_dict_size': dictionary.dict_size,
+            'model_type': 'SingleExpert'
+        }
 
-PLOT_OVERALL = True
-PLOT_PER_EXPERT = False
-PLOT_FEATURE_SCATTER = True
-
-MIN_FEATURE_COUNT = 5  # only features seen in >= this many tokens get summarized
-TOP_FEATURES_TO_LIST = 50  # for optional top tables
-
-DIFF_TOP_K = 200
-JACCARD_THRESHOLD = 0.25  # also export all tokens at or below this threshold
-
-
-def ensure_dir(path: str) -> None:
-    os.makedirs(path, exist_ok=True)
-
-
-def load_past_verbs(max_count: int = 1500) -> List[str]:
-    verbs: List[str] = []
-    try:
-        import importlib.util
-
-        ta_path = os.path.abspath(os.path.join(os.path.dirname(__file__), 'test-activate.py'))
-        if os.path.exists(ta_path):
-            spec = importlib.util.spec_from_file_location("test_activate_mod", ta_path)
-            assert spec and spec.loader
-            mod = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(mod)  # type: ignore
-            if hasattr(mod, 'TOKEN_CATEGORIES') and 'verbs_past' in mod.TOKEN_CATEGORIES:
-                verbs = list(mod.TOKEN_CATEGORIES['verbs_past'])
-    except Exception:
-        pass
-
-    if not verbs:
-        # Fallback minimal list; user should supply a file or rely on test-activate list for full 1500
-        verbs = [
+TOKEN_CATEGORIES = {
+    'verbs_past': [
         'walked', 'talked', 'played', 'worked', 'studied', 'learned', 'taught', 'helped', 'called', 'asked',
         'answered', 'listened', 'watched', 'looked', 'saw', 'heard', 'felt', 'touched', 'smelled', 'tasted',
         'ate', 'drank', 'cooked', 'cleaned', 'washed', 'dried', 'folded', 'packed', 'unpacked', 'moved',
@@ -176,6 +136,7 @@ def load_past_verbs(max_count: int = 1500) -> List[str]:
         'exhibited', 'displayed', 'revealed', 'exposed', 'uncovered', 'discovered', 'invented', 'patented', 'copyrighted', 'trademarked',
         'licensed', 'authorized', 'approved', 'rejected', 'denied', 'refused', 'accepted', 'embraced', 'adopted', 'implemented',
         
+        # Additional verbs - 200+ more
         'accelerated', 'accessed', 'accompanied', 'activated', 'actualized', 'adapted', 'addressed', 'administered', 'admitted', 'advocated',
         'affiliated', 'aggregated', 'aligned', 'allocated', 'amplified', 'analyzed', 'anchored', 'animated', 'annotated', 'anticipated',
         'appeared', 'applied', 'appointed', 'approached', 'approximated', 'archived', 'articulated', 'ascended', 'aspired', 'asserted',
@@ -272,418 +233,405 @@ def load_past_verbs(max_count: int = 1500) -> List[str]:
         'walked', 'wanted', 'warned', 'washed', 'watched', 'weighed', 'welcomed', 'went', 'widened', 'won',
         'wondered', 'worked', 'worried', 'wrapped', 'written', 'yelled', 'yielded', 'zoomed'
     ]
+}
 
-    seen = set()
-    unique = []
-    for v in verbs:
-        if v not in seen:
-            seen.add(v)
-            unique.append(v)
-
-    return unique[:max_count]
-
-
-
-
-def select_device(prefer_cuda: bool = True) -> str:
-    if prefer_cuda and t.cuda.is_available():
-        return f'cuda:{GPU}'
-    return 'cpu'
-
-
-def load_lm_and_tokenizer(device: str) -> Tuple[LanguageModel, AutoTokenizer]:
-    tried: List[str] = []
-    last_err: Optional[Exception] = None
-
-    candidates = [
-        lm,
-        os.path.abspath(os.path.join(os.path.dirname(__file__), 'gpt2')),
-        'openai-community/gpt2',
-        'gpt2',
-    ]
-
-    for cand in candidates:
+class TokenExpertAnalyzer:
+    def __init__(self, model, dictionary, tokenizer, model_info, device="cpu"):
+        self.model = model
+        self.dictionary = dictionary
+        self.tokenizer = tokenizer
+        self.model_info = model_info
+        self.device = device
+        self.layer_module = self._get_layer_module()
+        
+    def _get_layer_module(self):
+        layer_name = f"transformer.h.{layer}"
+        layer_parts = layer_name.split('.')
+        layer_module = self.model
+        for part in layer_parts:
+            if part.isdigit():
+                layer_module = layer_module[int(part)]
+            else:
+                layer_module = getattr(layer_module, part)
+        return layer_module
+    
+    def get_token_activation(self, token_text):
         try:
-            model = LanguageModel(cand, dispatch=True, device_map=device)
-            tokenizer = AutoTokenizer.from_pretrained(cand)
-            return model, tokenizer
+            context_text = f"The word {token_text} is important."
+            
+            with t.no_grad():
+                with self.model.trace(context_text, scan=False, validate=False) as tracer:
+                    hidden_states = self.layer_module.output.save()
+                
+                activations = hidden_states
+                if isinstance(activations, tuple):
+                    activations = activations[0]
+                
+                if len(activations.shape) == 3:
+                    activations = activations[0]
+                
+                tokens = self.tokenizer.encode(context_text)
+                token_id = self.tokenizer.encode(token_text, add_special_tokens=False)
+                
+                if len(token_id) == 1:
+                    target_token_id = token_id[0]
+                    token_positions = [i for i, tid in enumerate(tokens) if tid == target_token_id]
+                    if token_positions:
+                        token_pos = token_positions[-1]
+                        return activations[token_pos].to(self.device)
+                
+                mid_pos = len(tokens) // 2
+                return activations[mid_pos].to(self.device)
+                
         except Exception as e:
-            tried.append(cand)
-            last_err = e
+            return None
+    
+    def analyze_token_features(self, token_text, top_n=10):
+        activation = self.get_token_activation(token_text)
+        if activation is None:
+            return None
+        
+        try:
+            x_hat, f = self.dictionary(activation.unsqueeze(0), output_features=True)
+            token_features = f[0]
+            
+            top_values, top_indices = token_features.topk(top_n, sorted=True)
+            
+            expert_features = defaultdict(list)
+            expert_activations = defaultdict(float)
+            
+            for fid, fval in zip(top_indices, top_values):
+                if fval.item() > 0:
+                    if self.model_info['is_multi_expert']:
+                        expert_id = fid.item() // self.model_info['expert_dict_size']
+                        local_feature_id = fid.item() % self.model_info['expert_dict_size']
+                    else:
+                        expert_id = 0
+                        local_feature_id = fid.item()
+                    
+                    expert_features[expert_id].append({
+                        'global_id': fid.item(),
+                        'local_id': local_feature_id,
+                        'value': fval.item()
+                    })
+                    expert_activations[expert_id] += fval.item()
+            
+            return {
+                'token': token_text,
+                'expert_features': dict(expert_features),
+                'expert_activations': dict(expert_activations),
+                'total_activation': sum(expert_activations.values()),
+                'active_experts': len(expert_features),
+                'top_features': [(fid.item(), fval.item()) for fid, fval in zip(top_indices, top_values) if fval.item() > 0]
+            }
+            
+        except Exception as e:
+            return None
 
-    raise RuntimeError(f"Failed to load language model/tokenizer. Tried: {tried}. Last error: {last_err}")
+def analyze_token_category(analyzer, category_name, tokens, top_n=10, max_tokens=100):
+    results = []
+    
+    for i, token in enumerate(tokens[:max_tokens]):
+        if i % 50 == 0:
+            print(f"Processing {i+1}/{min(len(tokens), max_tokens)}")
+        
+        result = analyzer.analyze_token_features(token, top_n)
+        if result is not None:
+            results.append(result)
+    
+    return results
 
-
-def find_non_scale_checkpoint(root: str = None) -> Optional[str]:
-    root = root or os.path.abspath(os.path.join(os.path.dirname(__file__), 'dictionaries'))
-    for dirpath, dirnames, filenames in os.walk(root):
-        if 'ae.pt' in filenames:
-            return os.path.join(dirpath, 'ae.pt')
-    return None
-
-
-def load_sae_variant(
-    device: str,
-    variant: str,
-    path: Optional[str],
-    activation_dim: int = 768,
-    dict_size: int = 32 * 768,
-    k: int = 32,
-    experts: int = 64,
-    e: int = E,
-    heaviside: bool = False,
-):
-    used_path = path
-    if used_path is None or not os.path.exists(used_path):
-        if variant == 'scale':
-            cand = os.path.abspath(os.path.join(os.path.dirname(__file__), 'dictionaries', 'MultiEncoder_Scale', f'{LAYER}.pt'))
-            if os.path.exists(cand):
-                used_path = cand
-        else:
-            used_path = find_non_scale_checkpoint()
-    if used_path is None or not os.path.exists(used_path):
-        raise FileNotFoundError(f"Could not find checkpoint for variant={variant}. Tried path={path} and auto-discovery.")
-
-    if variant == 'scale':
-        ae = MultiExpertScaleAutoEncoder(
-            activation_dim=activation_dim,
-            dict_size=dict_size,
-            k=k,
-            experts=experts,
-            e=e,
-            heaviside=heaviside,
-        )
-    else:
-        ae = MultiExpertAutoEncoder(
-            activation_dim=activation_dim,
-            dict_size=dict_size,
-            k=k,
-            experts=experts,
-            e=e,
-            heaviside=heaviside,
-        )
-
-    state = t.load(used_path, map_location=device)
-    ae.load_state_dict(state)
-    ae.to(device)
-    ae.eval()
-    return ae, used_path
-
-
-def get_layer_module(model: LanguageModel, layer: int):
-    return model.transformer.h[layer]
-
-
-@t.no_grad()
-def get_token_activation(
-    model: LanguageModel,
-    tokenizer: AutoTokenizer,
-    layer_module,
-    token_text: str,
-    device: str,
-) -> Optional[t.Tensor]:
-    try:
-        context_text = f"The word {token_text} is important."
-
-        with model.trace(context_text, scan=False, validate=False):
-            hidden_states = layer_module.output.save()
-
-        acts = hidden_states
-        if isinstance(acts, tuple):
-            acts = acts[0]
-        if acts.dim() == 3:
-            acts = acts[0]
-
-        toks = tokenizer.encode(context_text)
-        target_ids = tokenizer.encode(token_text, add_special_tokens=False)
-        if len(target_ids) == 1:
-            target_id = target_ids[0]
-            positions = [i for i, tid in enumerate(toks) if tid == target_id]
-            if positions:
-                pos = positions[-1]
-                return acts[pos].to(device)
-
-        # Fallback: middle position
-        mid = len(toks) // 2
-        return acts[mid].to(device)
-    except Exception:
-        return None
-
-
-@t.no_grad()
-def topn_features_and_expert(
-    ae,
-    x: t.Tensor,
-    n: int,
-) -> Tuple[Sequence[int], int]:
-    """
-    Compute top-n feature indices (global) and the top-1 expert id for activation x.
-    Returns (indices_sorted_by_value_desc, expert_id).
-    """
-    # Ensure batch
-    xb = x.unsqueeze(0) if x.dim() == 1 else x
-
-    # Reproduce gating expert for top-1 expert id
-    gate_logits = ae.gate(xb - ae.b_gate)
-    gate_scores = t.softmax(gate_logits, dim=-1)
-    expert_id = int(t.argmax(gate_scores, dim=-1).item())
-
-    # Full feature vector
-    f = ae.encode(xb)
-    vals, idxs = f.topk(k=n, dim=-1, sorted=True)
-    top_idxs = [int(i) for i in idxs[0].tolist() if float(vals[0][(idxs[0] == i).nonzero(as_tuple=True)[0][0]]) > 0]
-    return top_idxs, expert_id
-
-
-def histogram_overlap_counts(sets: List[set], n: int) -> List[int]:
-    hist = [0] * (n + 1)
-    m = len(sets)
-    for i in range(m):
-        si = sets[i]
-        for j in range(i + 1, m):
-            ov = len(si & sets[j])
-            if 0 <= ov <= n:
-                hist[ov] += 1
-    return hist
-
-
-def entropy_from_hist(hist: Sequence[int]) -> float:
-    total = sum(hist)
-    if total == 0:
-        return 0.0
-    ent = 0.0
-    for c in hist:
-        if c > 0:
-            p = c / total
-            ent -= p * math.log(p + 1e-12)
-    return float(ent)
-
-
-def analyze():
-    random.seed(SEED)
-    t.manual_seed(SEED)
-
-    ensure_dir(OUTPUT_ROOT)
-
-    device = select_device()
-    model, tokenizer = load_lm_and_tokenizer(device)
-    # Load both SAEs
-    ae_scale, path_scale = load_sae_variant(device, variant='scale', path=SCALE_MODEL_PATH)
-    ae_plain, path_plain = load_sae_variant(device, variant='plain', path=PLAIN_MODEL_PATH)
-    layer_module = get_layer_module(model, LAYER)
-
-
-    # Token source: dataset mode or internal verbs list
-    if DATASET_PATH:
-        print(f"Using all tokens from dataset: {DATASET_PATH}")
-        verbs = load_tokens_from_dataset(DATASET_PATH, tokenizer, max_tokens=NUM_PAST_VERBS)
-        print(f"Loaded {len(verbs)} unique tokens from dataset.")
-    else:
-        verbs = load_past_verbs(max_count=NUM_PAST_VERBS)
-        if len(verbs) < NUM_PAST_VERBS:
-            print(f"Warning: only {len(verbs)} past verbs available; proceeding with fewer than requested {NUM_PAST_VERBS}.")
-
-    # Collect per-verb data (shared activations, then branch into two SAEs)
-    verb_ok: List[str] = []  # tokens that produced an activation
-    acts_cache: List[Tuple[str, t.Tensor]] = []
-
-    for i, v in enumerate(verbs):
-        if (i % 100) == 0:
-            print(f"Processing {i + 1}/{len(verbs)}: {v}")
-
-        x = get_token_activation(model, tokenizer, layer_module, v, device)
-        if x is None:
-            continue
-        acts_cache.append((v, x))
-        verb_ok.append(v)
-
-    # For each variant, compute top-n sets and experts
-    def collect_for(ae_model):
-        sets: List[set] = []
-        experts: List[int] = []
-        ok_tokens: List[str] = []
-        for v, x in acts_cache:
-            idxs, eid = topn_features_and_expert(ae_model, x, TOP_N_FEATURES)
-            if len(idxs) == 0:
-                continue
-            sets.append(set(idxs))
-            experts.append(eid)
-            ok_tokens.append(v)
-        return sets, experts, ok_tokens
-
-    verb_sets_scale, verb_experts_scale, tokens_scale = collect_for(ae_scale)
-    verb_sets_plain, verb_experts_plain, tokens_plain = collect_for(ae_plain)
-
-    # Overall overlap distribution (per variant)
-    overall_hist_scale = histogram_overlap_counts(verb_sets_scale, TOP_N_FEATURES)
-    overall_hist_plain = histogram_overlap_counts(verb_sets_plain, TOP_N_FEATURES)
-
-    def per_expert_hists_from(sets: List[set], experts: List[int]):
-        per_sets: Dict[int, List[set]] = defaultdict(list)
-        for s, e in zip(sets, experts):
-            per_sets[e].append(s)
-        per_hists: Dict[int, List[int]] = {}
-        for e, s_list in per_sets.items():
-            per_hists[e] = histogram_overlap_counts(s_list, TOP_N_FEATURES)
-        return per_sets, per_hists
-
-    per_expert_sets_scale, per_expert_hists_scale = per_expert_hists_from(verb_sets_scale, verb_experts_scale)
-    per_expert_sets_plain, per_expert_hists_plain = per_expert_hists_from(verb_sets_plain, verb_experts_plain)
-
-    def summarize_hist(hist: List[int]) -> Dict[str, float]:
-        total_pairs = sum(hist)
-        peak = max(hist) if hist else 0
-        peak_frac = (peak / total_pairs) if total_pairs else 0.0
-        ent = entropy_from_hist(hist)
-        return {
-            'total_pairs': int(total_pairs),
-            'peak_bin': int(hist.index(peak) if hist else 0),
-            'peak_count': int(peak),
-            'peak_fraction': float(peak_frac),
-            'entropy_nats': float(ent),
-        }
-
-    summary = {
-        'config': {
-            'layer': LAYER,
-            'top_n': TOP_N_FEATURES,
-            'num_verbs_requested': NUM_PAST_VERBS,
-            'num_verbs_activations': len(verb_ok),
-            'device': device,
-            'lm_path': lm,
-            'scale_path': path_scale,
-            'plain_path': path_plain,
-        },
-        'scale': {
-            'overall': {'hist': overall_hist_scale, **summarize_hist(overall_hist_scale)},
-            'per_expert': {},
-            'num_tokens_used': len(tokens_scale),
-        },
-        'plain': {
-            'overall': {'hist': overall_hist_plain, **summarize_hist(overall_hist_plain)},
-            'per_expert': {},
-            'num_tokens_used': len(tokens_plain),
-        },
+def create_expert_distribution_analysis(category_results, category_name, model_info, output_dir):
+    expert_usage_count = defaultdict(int)
+    
+    for result in category_results:
+        for expert_id, activation in result['expert_activations'].items():
+            expert_usage_count[expert_id] += 1
+    
+    fig, ax = plt.subplots(1, 1, figsize=(8, 6))
+    
+    if expert_usage_count:
+        expert_ids = sorted(expert_usage_count.keys())
+        usage_counts = [expert_usage_count[eid] for eid in expert_ids]
+        
+        ax.bar(expert_ids, usage_counts, color='steelblue', alpha=0.7)
+        ax.set_title(f'Expert Usage Count - {category_name}')
+        ax.set_xlabel('Expert ID')
+        ax.set_ylabel('Token Count')
+        ax.grid(True, alpha=0.3)
+    
+    plt.tight_layout()
+    
+    output_file = os.path.join(output_dir, f"{category_name}_expert_usage.png")
+    plt.savefig(output_file, dpi=300, bbox_inches='tight')
+    plt.close()
+    
+    return {
+        'expert_usage_count': dict(expert_usage_count),
+        'total_tokens': len(category_results),
+        'experts_used': len(expert_usage_count)
     }
 
-    for e, hist in per_expert_hists_scale.items():
-        summary['scale']['per_expert'][str(e)] = {
-            'hist': hist,
-            **summarize_hist(hist),
-            'num_verbs_in_expert': len(per_expert_sets_scale[e]),
-        }
-    for e, hist in per_expert_hists_plain.items():
-        summary['plain']['per_expert'][str(e)] = {
-            'hist': hist,
-            **summarize_hist(hist),
-            'num_verbs_in_expert': len(per_expert_sets_plain[e]),
-        }
-
-    # Also compute frequency of exact top-n sets per expert for peakedness
-    per_expert_combo_freq_scale: Dict[str, List[Tuple[str, int]]] = {}
-    for e, sets in per_expert_sets_scale.items():
-        cnt = Counter(tuple(sorted(list(s))) for s in sets)
-        top5 = cnt.most_common(5)
-        per_expert_combo_freq_scale[str(e)] = [("-".join(map(str, k)), v) for k, v in top5]
-    summary['scale']['per_expert_combo_top5'] = per_expert_combo_freq_scale
-
-    per_expert_combo_freq_plain: Dict[str, List[Tuple[str, int]]] = {}
-    for e, sets in per_expert_sets_plain.items():
-        cnt = Counter(tuple(sorted(list(s))) for s in sets)
-        top5 = cnt.most_common(5)
-        per_expert_combo_freq_plain[str(e)] = [("-".join(map(str, k)), v) for k, v in top5]
-    summary['plain']['per_expert_combo_top5'] = per_expert_combo_freq_plain
-
-        
-    def plot_hist_overlay(hist_a, hist_b, labels, title, path):
-        xs = list(range(max(len(hist_a), len(hist_b))))
-        ya = hist_a + [0] * (len(xs) - len(hist_a))
-        yb = hist_b + [0] * (len(xs) - len(hist_b))
-        sa = float(sum(ya))
-        sb = float(sum(yb))
-        pa = [y / sa if sa > 0 else 0.0 for y in ya]
-        pb = [y / sb if sb > 0 else 0.0 for y in yb]
-        bw = 1
-        plt.figure(figsize=(8, 5))
-        plt.bar(xs, pa, width=bw, color='#337AFF', alpha=0.6, label=labels[0], align='center')
-        plt.bar(xs, pb, width=bw, color='#FF5733', alpha=0.6, label=labels[1], align='center')
-        tick_pos = xs[::max(1, XTICK_STEP)]
-        plt.xticks(tick_pos, tick_pos)
-        plt.xlabel(f'# Overlaped Feature')
-        plt.ylabel('Probability')
-        plt.grid(True, axis='y', alpha=0.3)
-        plt.legend()
-        plt.tight_layout()
-        plt.savefig(path, dpi=300, bbox_inches='tight')
-        plt.close()
-
-    plot_hist_overlay(
-        overall_hist_scale,
-        overall_hist_plain,
-        labels=("Scale", "Plain"),
-        title=f'Overall top-{TOP_N_FEATURES} overlap distribution (both)',
-        path=os.path.join(OUTPUT_ROOT, f'overall_overlap_top{TOP_N_FEATURES}_both.png'),
-    )
-
-    def plot_cdf_overlay(hist_a, hist_b, labels, title, path):
-        # normalize to proportions then compute CDFs
-        import numpy as _np
-        la = _np.array(hist_a, dtype=float)
-        lb = _np.array(hist_b, dtype=float)
-        xs = list(range(max(len(la), len(lb))))
-        ya = _np.pad(la, (0, max(0, len(xs) - len(la))), constant_values=0.0)
-        yb = _np.pad(lb, (0, max(0, len(xs) - len(lb))), constant_values=0.0)
-        sa = float(_np.sum(ya))
-        sb = float(_np.sum(yb))
-        pa = ya / sa if sa > 0 else _np.zeros_like(ya)
-        pb = yb / sb if sb > 0 else _np.zeros_like(yb)
-        cdfa = _np.cumsum(pa)
-        cdfb = _np.cumsum(pb)
-        cdfa = _np.concatenate((_np.array([0.0]), cdfa))
-        cdfb = _np.concatenate((_np.array([0.0]), cdfb))
-        xstep = _np.arange(len(cdfa))
-        plt.figure(figsize=(8, 5))
-        plt.step(xstep, cdfa, where='pre', color='tab:blue', label=labels[0], linewidth=3)
-        plt.step(xstep, cdfb, where='pre', color='tab:orange', label=labels[1], linewidth=3)
-        xmax = int(_np.max(xstep))
-        plt.xlim(0, xmax)
-        tick_pos = _np.arange(0, xmax + 1, max(1, XTICK_STEP))
-        plt.xticks(tick_pos, tick_pos)
-        plt.ylim(0, 1)
-        plt.xlabel(f'Overlap count')
-        plt.ylabel('CDF')
-        plt.grid(True, axis='y', alpha=0.3)
-        plt.legend()
-        plt.tight_layout()
-        plt.savefig(path, dpi=300, bbox_inches='tight')
-        plt.close()
-
-    plot_cdf_overlay(
-        overall_hist_scale,
-        overall_hist_plain,
-        labels=("Scale", "Plain"),
-        title=f'Overall top-{TOP_N_FEATURES} overlap CDF (both)',
-        path=os.path.join(OUTPUT_ROOT, f'overall_overlap_top{TOP_N_FEATURES}_both_cdf.png'),
-    )
-
-    # Compute and print average overlap counts for both variants
-    def _avg_from_hist(hist: List[int]) -> float:
-        total = sum(hist)
-        if total == 0:
-            return 0.0
-        return float(sum(i * c for i, c in enumerate(hist)) / total)
-
-    avg_scale = _avg_from_hist(overall_hist_scale)
-    avg_plain = _avg_from_hist(overall_hist_plain)
-    print(f"Average overlap count (Scale): {avg_scale:.6f}")
-    print(f"Average overlap count (Plain): {avg_plain:.6f}")
-
-
+def save_results(category_results, category_name, analysis_stats, model_info, output_dir):
+    detailed_results = {
+        'category': category_name,
+        'model_info': model_info,
+        'analysis_stats': analysis_stats,
+        'token_results': category_results
+    }
     
+    output_file = os.path.join(output_dir, f"{category_name}_results.json")
+    with open(output_file, 'w', encoding='utf-8') as f:
+        json.dump(detailed_results, f, indent=2, ensure_ascii=False)
 
 def main():
-    analyze()
+    # 计算CDF
+    device = f'cuda:{GPU}'
+    top_n_features = 3
+    max_tokens_per_category = 2000
+    print("Loading LM and tokenizer...")
+    model = LanguageModel(lm, dispatch=True, device_map=device)
+    tokenizer = AutoTokenizer.from_pretrained(lm)
 
+    # 加载模型A
+    if MODEL_A_TYPE == "scale":
+        aeA = MultiExpertScaleAutoEncoder(
+            activation_dim=ACT_DIM,
+            dict_size=DICT_SIZE,
+            k=K,
+            experts=EXPERTS,
+            e=E_1,
+            heaviside=False
+        )
+    else:
+        aeA = MultiExpertAutoEncoder(
+            activation_dim=ACT_DIM,
+            dict_size=DICT_SIZE,
+            k=K,
+            experts=EXPERTS,
+            e=E_1,
+            heaviside=False
+        )
+    aeA.load_state_dict(t.load(MODEL_A_PATH))
+    aeA.to(device)
+    aeA.eval()
+    infoA = detect_model_type(aeA)
 
-if __name__ == '__main__':
+    # 加载模型B
+    if MODEL_B_TYPE == "scale":
+        aeB = MultiExpertScaleAutoEncoder(
+            activation_dim=ACT_DIM,
+            dict_size=DICT_SIZE,
+            k=K,
+            experts=EXPERTS,
+            e=E_2,
+            heaviside=False
+        )
+    else:
+        aeB = MultiExpertAutoEncoder(
+            activation_dim=ACT_DIM,
+            dict_size=DICT_SIZE,
+            k=K,
+            experts=EXPERTS,
+            e=E_2,
+            heaviside=False
+        )
+    aeB.load_state_dict(t.load(MODEL_B_PATH))
+    aeB.to(device)
+    aeB.eval()
+    infoB = detect_model_type(aeB)
+
+    # 加载模型C（可选）
+    if MODEL_C_TYPE == "scale":
+        aeC = MultiExpertScaleAutoEncoder(
+            activation_dim=ACT_DIM,
+            dict_size=DICT_SIZE,
+            k=K,
+            experts=EXPERTS,
+            e=E_3,
+            heaviside=False
+        )
+    else:
+        aeC = MultiExpertAutoEncoder(
+            activation_dim=ACT_DIM,
+            dict_size=DICT_SIZE,
+            k=K,
+            experts=EXPERTS,
+            e=E_3,
+            heaviside=False
+        )
+    aeC.load_state_dict(t.load(MODEL_C_PATH))
+    aeC.to(device)
+    aeC.eval()
+    infoC = detect_model_type(aeC)
+
+    # 加载模型D（可选）
+    if MODEL_D_TYPE == "scale":
+        aeD = MultiExpertScaleAutoEncoder(
+            activation_dim=ACT_DIM,
+            dict_size=DICT_SIZE,
+            k=K,
+            experts=EXPERTS,
+            e=E_4,
+            heaviside=False
+        )
+    else:
+        aeD = MultiExpertAutoEncoder(
+            activation_dim=ACT_DIM,
+            dict_size=DICT_SIZE,
+            k=K,
+            experts=EXPERTS,
+            e=E_4,
+            heaviside=False
+        )
+    aeD.load_state_dict(t.load(MODEL_D_PATH))
+    aeD.to(device)
+    aeD.eval()
+    infoD = detect_model_type(aeD)
+
+    # 只分析verbs_past类别
+    category_name = 'verbs_past'
+    tokens = TOKEN_CATEGORIES[category_name]
+    print(f"Analyzing {category_name} ({len(tokens)} tokens)...")
+
+    analyzerA = TokenExpertAnalyzer(model, aeA, tokenizer, infoA, device)
+    analyzerB = TokenExpertAnalyzer(model, aeB, tokenizer, infoB, device)
+    analyzerC = TokenExpertAnalyzer(model, aeC, tokenizer, infoC, device)
+    analyzerD = TokenExpertAnalyzer(model, aeD, tokenizer, infoD, device)
+
+    resultsA = analyze_token_category(analyzerA, category_name, tokens, top_n_features, max_tokens_per_category)
+    resultsB = analyze_token_category(analyzerB, category_name, tokens, top_n_features, max_tokens_per_category)
+    resultsC = analyze_token_category(analyzerC, category_name, tokens, top_n_features, max_tokens_per_category)
+    resultsD = analyze_token_category(analyzerD, category_name, tokens, top_n_features, max_tokens_per_category)
+
+    def get_expert_usage(results):
+        expert_usage_count = defaultdict(int)
+        for result in results:
+            for expert_id in result['expert_activations'].keys():
+                expert_usage_count[expert_id] += 1
+        return expert_usage_count
+
+    usageA = get_expert_usage(resultsA)
+    usageB = get_expert_usage(resultsB)
+    usageC = get_expert_usage(resultsC)
+    usageD = get_expert_usage(resultsD)
+
+    def get_sorted_expert_density(usage):
+        items = sorted(usage.items(), key=lambda x: x[1], reverse=True)
+        ids = [eid for eid, _ in items]
+        counts = [usage[eid] for eid in ids]
+        total = sum(counts)
+        density = [c / total if total > 0 else 0.0 for c in counts]
+        return ids, density
+
+    idsA, densityA = get_sorted_expert_density(usageA)
+    idsB, densityB = get_sorted_expert_density(usageB)
+    idsC, densityC = get_sorted_expert_density(usageC)
+    idsD, densityD = get_sorted_expert_density(usageD)
+
+    # 柱状图（重叠）
+    bw = 1.0
+    plt.figure(figsize=(8, 5))
+    xA = range(len(densityA))
+    xB = range(len(densityB))
+    plt.bar(xA, densityA, width=bw, color='tab:blue', alpha=0.6, label=f"Expert {E_1}", align='center')
+    plt.bar(xB, densityB, width=bw, color='tab:orange', alpha=0.6, label=f"Expert {E_2}", align='center')
+    plt.xlabel('Expert (sorted by own usage, position index)')
+    plt.ylabel('Proportion of tokens')
+    # Title removed per request
+    plt.grid(True, axis='y', alpha=0.3)
+    plt.legend()
+    plt.tight_layout()
+    fname_bar = f"{MODEL_A_TYPE[:2]}_{MODEL_B_TYPE[:2]}_{E_1}_{E_2}_bar.png"
+    output_file_bar = os.path.join(OUTPUT_ROOT, fname_bar)
+    plt.savefig(output_file_bar, dpi=300, bbox_inches='tight')
+    plt.close()
+    print(f"Bar plot saved to {output_file_bar}")
+
+    # CDF阶梯图
+    import numpy as np
+    def get_cdf_full(density):
+        cdf = np.cumsum(density)
+        cdf = np.concatenate([[0], cdf])
+        x = np.arange(len(cdf))
+        if abs(cdf[-1] - 1.0) > 1e-6:
+            cdf[-1] = 1.0
+        return x, cdf
+
+    xA_cdf, cdfA = get_cdf_full(densityA)
+    xB_cdf, cdfB = get_cdf_full(densityB)
+
+    plt.figure(figsize=(8, 5))
+    plt.step(xA_cdf, cdfA, where='pre', color='tab:blue', label=f"Expert {E_1}", linewidth=3)
+    plt.step(xB_cdf, cdfB, where='pre', color='tab:orange', label=f"Expert {E_2}", linewidth=3)
+    plt.xlabel('Expert Rank')
+    plt.ylabel('CDF')
+    plt.ylim(0, 1)
+    plt.grid(True, axis='y', alpha=0.3)
+    plt.legend()
+    plt.tight_layout()
+    fname_cdf = f"{MODEL_A_TYPE[:2]}_{MODEL_B_TYPE[:2]}_{E_1}_{E_2}_cdf.png"
+    output_file_cdf = os.path.join(OUTPUT_ROOT, fname_cdf)
+    plt.savefig(output_file_cdf, dpi=300, bbox_inches='tight')
+    plt.close()
+    print(f"CDF plot saved to {output_file_cdf}")
+
+    # 四模型叠加 CDF（A/B/C/D）
+    import numpy as np
+    max_len = max(len(densityA), len(densityB), len(densityC), len(densityD))
+    def pad(d, L):
+        return d + [0.0] * (L - len(d))
+    dA = pad(densityA, max_len)
+    dB = pad(densityB, max_len)
+    dC = pad(densityC, max_len)
+    dD = pad(densityD, max_len)
+
+    xA4, cA = get_cdf_full(dA)
+    xB4, cB = get_cdf_full(dB)
+    xC4, cC = get_cdf_full(dC)
+    xD4, cD = get_cdf_full(dD)
+
+    plt.figure(figsize=(8, 5))
+    plt.step(xA4, cA, where='pre', color='tab:blue', label=f"Expert {E_1}", linewidth=3)
+    plt.step(xB4, cB, where='pre', color='tab:orange', label=f"Expert {E_2}", linewidth=3)
+    plt.step(xC4, cC, where='pre', color='tab:green', label=f"Expert {E_3}", linewidth=3)
+    plt.step(xD4, cD, where='pre', color='tab:red', label=f"Expert {E_4}", linewidth=3)
+    plt.xlabel('Expert Rank')
+    plt.ylabel('CDF')
+    plt.ylim(0, 1)
+    plt.grid(True, axis='y', alpha=0.3)
+    plt.legend()
+    plt.tight_layout()
+    typeA = MODEL_A_TYPE[:2]
+    typeB = MODEL_B_TYPE[:2]
+    typeC = MODEL_C_TYPE[:2]
+    typeD = MODEL_D_TYPE[:2]
+    fname_cdf4 = f"{typeA}_{typeB}_{typeC}_{typeD}_{E_1}_{E_2}_{E_3}_{E_4}_cdf.png"
+    output_file_cdf4 = os.path.join(OUTPUT_ROOT, fname_cdf4)
+    plt.savefig(output_file_cdf4, dpi=300, bbox_inches='tight')
+    plt.close()
+    print(f"4-model CDF plot saved to {output_file_cdf4}")
+
+    plt.figure(figsize=(8, 5))
+    bw = 1.0
+    xA4 = range(len(densityA))
+    xB4 = range(len(densityB))
+    xC4 = range(len(densityC))
+    xD4 = range(len(densityD))
+    plt.bar(xA4, densityA, width=bw, color='tab:blue', alpha=0.5, label=f"Expert {E_1}", align='center')
+    plt.bar(xB4, densityB, width=bw, color='tab:orange', alpha=0.5, label=f"Expert {E_2}", align='center')
+    plt.bar(xC4, densityC, width=bw, color='tab:green', alpha=0.5, label=f"Expert {E_3}", align='center')
+    plt.bar(xD4, densityD, width=bw, color='tab:red', alpha=0.5, label=f"Expert {E_4}", align='center')
+    plt.xlabel('Expert (sorted by own usage, position index)')
+    plt.ylabel('Proportion of tokens')
+    plt.grid(True, axis='y', alpha=0.3)
+    plt.legend()
+    plt.tight_layout()
+    fname_bar4 = f"{typeA}_{typeB}_{typeC}_{typeD}_{E_1}_{E_2}_{E_3}_{E_4}_bar.png"
+    output_file_bar4 = os.path.join(OUTPUT_ROOT, fname_bar4)
+    plt.savefig(output_file_bar4, dpi=300, bbox_inches='tight')
+    plt.close()
+    print(f"4-model BAR plot saved to {output_file_bar4}")
+
+if __name__ == "__main__":
     main()
