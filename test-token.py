@@ -301,10 +301,10 @@ def create_token_visualization(token_text, batch_idx, token_pos,
             
             # 创建双轴图表
             bars1 = ax1.bar([x - 0.2 for x in expert_ids], counts, width=0.4, 
-                           color='steelblue', alpha=0.8, label='Feature Count')
+                           color='steelblue', label='Feature Count')
             ax1_twin = ax1.twinx()
             bars2 = ax1_twin.bar([x + 0.2 for x in expert_ids], total_activations, width=0.4,
-                                color='orange', alpha=0.8, label='Total Strength')
+                                color='orange', label='Total Strength')
             
             ax1.set_title(f'Expert Activations Overview\n{title_suffix}', 
                           fontsize=14, fontweight='bold')
@@ -392,7 +392,7 @@ def create_token_visualization(token_text, batch_idx, token_pos,
                     label = f'Single Expert ({len(features)} features)'
                     center_label = 'Expert'
                 
-                bars = ax3.bar(x_positions, feature_values, color=color, alpha=0.8, label=label)
+                bars = ax3.bar(x_positions, feature_values, color=color, label=label)
                 
                 # 在每个bar上标注feature ID
                 for bar, fid, val in zip(bars, feature_ids, feature_values):

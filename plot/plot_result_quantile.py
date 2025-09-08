@@ -2,7 +2,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 markers = ['o', 's', '^', 'D', 'v']
-colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd']
+colors = ['#264653', '#2a9d8f', '#e9c46a', '#f4a261', '#e76f51']
 
 plt.rcParams.update({
     'font.size': 22,

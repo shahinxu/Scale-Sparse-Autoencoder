@@ -47,12 +47,12 @@ plt.rcParams.update({
 
 # 设置柱状图的位置
 x = np.arange(len(k_values))
-width = 0.35
+width = 0.4
 
-fig, ax1 = plt.subplots(figsize=(10, 6))
+fig, ax1 = plt.subplots(figsize=(8, 8))
 
-rects1 = ax1.bar(x - width/2, no_scale_mse, width, label='Plain', color='#FF5733', alpha=0.8, hatch='///')
-rects2 = ax1.bar(x + width/2, with_scale_mse, width, label='Scale', color='#337AFF', alpha=0.8, hatch='\\\\')
+rects1 = ax1.bar(x - width/2, no_scale_mse, width, label='Plain', color='#264653', hatch='///')
+rects2 = ax1.bar(x + width/2, with_scale_mse, width, label='Scale', color='#2a9d8f', hatch='\\\\')
 
 ax1.set_xlabel('Sparsity (L0)')
 ax1.set_ylabel('MSE', color='black')
@@ -60,12 +60,12 @@ ax1.set_ylabel('MSE', color='black')
 ax1.set_xticks(x)
 ax1.set_xticklabels([f'$10^{{{int(np.log10(k))}}}$' if k in [1, 10, 100, 1000] else str(k) for k in k_values])
 ax1.set_ylim(2000, 16000)
-ax1.grid(axis='y', alpha=0.3)
+ax1.grid(axis='y', alpha=0.3, linestyle='--', linewidth=0.8)
 
 ax2 = ax1.twinx()
 
-rects3 = ax2.bar(x - width/2, no_scale_recovered, width, color='#FF5733', alpha=0.8, hatch='///')
-rects4 = ax2.bar(x + width/2, with_scale_recovered, width, color='#337AFF', alpha=0.8, hatch='\\\\')
+rects3 = ax2.bar(x - width/2, no_scale_recovered, width, color='#264653', hatch='///')
+rects4 = ax2.bar(x + width/2, with_scale_recovered, width, color='#2a9d8f', hatch='\\\\')
 
 ax2.set_ylabel('Loss Recovered', color='black')
 ax2.set_ylim(1, 0.86)

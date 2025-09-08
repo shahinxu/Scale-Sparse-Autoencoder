@@ -61,8 +61,8 @@ x = np.arange(len(experts_16))
 width = 0.4
 
 # 第一个子图 - L0=16
-ax1.bar(x - width/2, scale_list_16, width, label='Scale', color='#337AFF', hatch='///')
-ax1.bar(x + width/2, plain_list_16, width, label='Plain', color='#FF5733', hatch='\\\\')
+ax1.bar(x - width/2, scale_list_16, width, label='Scale', color='#264653', hatch='///')
+ax1.bar(x + width/2, plain_list_16, width, label='Plain', color='#2a9d8f', hatch='\\\\')
 ax1.set_xticks(x)
 ax1.set_xticklabels(experts_16)
 ax1.set_xlabel('# Experts')
@@ -73,8 +73,8 @@ ax1.legend()
 ax1.grid(True, alpha=0.3, linestyle='--', linewidth=0.8)
 
 # 第二个子图 - L0=32
-ax2.bar(x - width/2, scale_list_32, width, color='#337AFF', hatch='///')
-ax2.bar(x + width/2, plain_list_32, width, color='#FF5733', hatch='\\\\')
+ax2.bar(x - width/2, scale_list_32, width, color='#264653', hatch='///')
+ax2.bar(x + width/2, plain_list_32, width, color='#2a9d8f', hatch='\\\\')
 ax2.set_xticks(x)
 ax2.set_xticklabels(experts_32)
 ax2.set_xlabel('# Experts')

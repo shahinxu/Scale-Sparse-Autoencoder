@@ -555,10 +555,10 @@ def main():
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(8, 8))
 
     # 第一张图：L0=16
-    ax1.step(xA4, cA, where='pre', color='tab:blue', label=f"Swicth SAE", linewidth=3)
-    ax1.step(xB4, cB, where='pre', color='tab:orange', label=f"Expert {E_2}", linewidth=3)
-    ax1.step(xC4, cC, where='pre', color='tab:green', label=f"Expert {E_3}", linewidth=3)
-    ax1.step(xD4, cD, where='pre', color='tab:red', label=f"Expert {E_4}", linewidth=3)
+    ax1.step(xA4, cA, where='pre', color='#264653', label=f"Swicth SAE", linewidth=3)
+    ax1.step(xB4, cB, where='pre', color='#2a9d8f', label=f"Expert {E_2}", linewidth=3)
+    ax1.step(xC4, cC, where='pre', color='#e9c46a', label=f"Expert {E_3}", linewidth=3)
+    ax1.step(xD4, cD, where='pre', color='#f4a261', label=f"Expert {E_4}", linewidth=3)
     ax1.set_xlabel('Expert Rank')
     ax1.set_ylabel('CDF')
     ax1.set_ylim(0, 1)
@@ -567,10 +567,10 @@ def main():
     ax1.legend(loc='lower right')
 
     # 第二张图：L0=32（相同数据）
-    ax2.step(xA4, cA, where='pre', color='tab:blue', linewidth=3)
-    ax2.step(xB4, cB, where='pre', color='tab:orange', linewidth=3)
-    ax2.step(xC4, cC, where='pre', color='tab:green', linewidth=3)
-    ax2.step(xD4, cD, where='pre', color='tab:red', linewidth=3)
+    ax2.step(xA4, cA, where='pre', color='#264653', linewidth=3)
+    ax2.step(xB4, cB, where='pre', color='#2a9d8f', linewidth=3)
+    ax2.step(xC4, cC, where='pre', color='#e9c46a', linewidth=3)
+    ax2.step(xD4, cD, where='pre', color='#f4a261', linewidth=3)
     ax2.set_xlabel('Expert Rank')
     ax2.set_ylim(0, 1)
     ax2.set_title('L0=32')
@@ -578,15 +578,10 @@ def main():
     ax2.grid(True, alpha=0.3, linestyle='--', linewidth=0.8)
 
     plt.tight_layout()
-    typeA = MODEL_A_TYPE[:2]
-    typeB = MODEL_B_TYPE[:2]
-    typeC = MODEL_C_TYPE[:2]
-    typeD = MODEL_D_TYPE[:2]
     fname_cdf4 = f"analysis_multi_expert_cdf.png"
-    output_file_cdf4 = os.path.join(OUTPUT_ROOT, fname_cdf4)
-    plt.savefig(output_file_cdf4, dpi=300, bbox_inches='tight')
+    plt.savefig(fname_cdf4, dpi=300, bbox_inches='tight')
     plt.close()
-    print(f"Combined CDF plot saved to {output_file_cdf4}")
+    print(f"Combined CDF plot saved to {fname_cdf4}")
 
 if __name__ == "__main__":
     main()

@@ -28,7 +28,7 @@ def main():
         scale,
         width,
         label='Scale',
-        color='#337AFF',
+        color='#264653',
         hatch='///'
     )
     plt.bar(
@@ -36,7 +36,7 @@ def main():
         plain,
         width,
         label='Plain',
-        color='#FF5733',
+        color='#2a9d8f',
         hatch='\\\\'
     )
 

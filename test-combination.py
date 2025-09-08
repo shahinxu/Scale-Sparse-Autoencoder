@@ -10,6 +10,7 @@ from transformers import AutoTokenizer
 
 from dictionary_learning.trainers.moe_physically_scale import MultiExpertScaleAutoEncoder
 from dictionary_learning.trainers.moe_physically import MultiExpertAutoEncoder
+from dictionary_learning.trainers.top_k import AutoEncoderTopK
 from config import lm
 import matplotlib.pyplot as plt
 
@@ -27,6 +28,7 @@ E = 1
 k = 32
 SCALE_MODEL_PATH: Optional[str] = f"dictionaries/MultiExpert_Scale_{k}_64_{E}/{LAYER}.pt"
 PLAIN_MODEL_PATH: Optional[str] = f"dictionaries/MultiExpert_{k}_64_{E}/{LAYER}.pt"
+TOPK_MODEL_PATH: Optional[str] = f"dictionaries/topk_{k}_8/{LAYER}.pt"
 
 OUTPUT_ROOT = f"feature_combo_overlap_both_{E}"
 
@@ -350,6 +352,12 @@ def load_sae_variant(
             e=e,
             heaviside=heaviside,
         )
+    elif variant == 'topk':
+        ae = AutoEncoderTopK(
+            activation_dim=activation_dim,
+            dict_size=dict_size,
+            k=k
+        )
     else:
         ae = MultiExpertAutoEncoder(
             activation_dim=activation_dim,
@@ -420,10 +428,15 @@ def topn_features_and_expert(
     # Ensure batch
     xb = x.unsqueeze(0) if x.dim() == 1 else x
 
-    # Reproduce gating expert for top-1 expert id
-    gate_logits = ae.gate(xb - ae.b_gate)
-    gate_scores = t.softmax(gate_logits, dim=-1)
-    expert_id = int(t.argmax(gate_scores, dim=-1).item())
+    # Check if the model has gate (MultiExpert models) or not (TopK models)
+    if hasattr(ae, 'gate') and hasattr(ae, 'b_gate'):
+        # Reproduce gating expert for top-1 expert id (MultiExpert models)
+        gate_logits = ae.gate(xb - ae.b_gate)
+        gate_scores = t.softmax(gate_logits, dim=-1)
+        expert_id = int(t.argmax(gate_scores, dim=-1).item())
+    else:
+        # TopK models don't have experts, use a default expert id
+        expert_id = 0
 
     # Full feature vector
     f = ae.encode(xb)
@@ -464,9 +477,10 @@ def analyze():
 
     device = select_device()
     model, tokenizer = load_lm_and_tokenizer(device)
-    # Load both SAEs
+    # Load all three SAEs
     ae_scale, path_scale = load_sae_variant(device, variant='scale', path=SCALE_MODEL_PATH)
     ae_plain, path_plain = load_sae_variant(device, variant='plain', path=PLAIN_MODEL_PATH)
+    ae_topk, path_topk = load_sae_variant(device, variant='topk', path=TOPK_MODEL_PATH, dict_size=4*768)
     layer_module = get_layer_module(model, LAYER)
 
 
@@ -510,10 +524,12 @@ def analyze():
 
     verb_sets_scale, verb_experts_scale, tokens_scale = collect_for(ae_scale)
     verb_sets_plain, verb_experts_plain, tokens_plain = collect_for(ae_plain)
+    verb_sets_topk, verb_experts_topk, tokens_topk = collect_for(ae_topk)
 
     # Overall overlap distribution (per variant)
     overall_hist_scale = histogram_overlap_counts(verb_sets_scale, TOP_N_FEATURES)
     overall_hist_plain = histogram_overlap_counts(verb_sets_plain, TOP_N_FEATURES)
+    overall_hist_topk = histogram_overlap_counts(verb_sets_topk, TOP_N_FEATURES)
 
     def per_expert_hists_from(sets: List[set], experts: List[int]):
         per_sets: Dict[int, List[set]] = defaultdict(list)
@@ -526,6 +542,7 @@ def analyze():
 
     per_expert_sets_scale, per_expert_hists_scale = per_expert_hists_from(verb_sets_scale, verb_experts_scale)
     per_expert_sets_plain, per_expert_hists_plain = per_expert_hists_from(verb_sets_plain, verb_experts_plain)
+    per_expert_sets_topk, per_expert_hists_topk = per_expert_hists_from(verb_sets_topk, verb_experts_topk)
 
     def summarize_hist(hist: List[int]) -> Dict[str, float]:
         total_pairs = sum(hist)
@@ -550,6 +567,7 @@ def analyze():
             'lm_path': lm,
             'scale_path': path_scale,
             'plain_path': path_plain,
+            'topk_path': path_topk,
         },
         'scale': {
             'overall': {'hist': overall_hist_scale, **summarize_hist(overall_hist_scale)},
@@ -560,6 +578,11 @@ def analyze():
             'overall': {'hist': overall_hist_plain, **summarize_hist(overall_hist_plain)},
             'per_expert': {},
             'num_tokens_used': len(tokens_plain),
+        },
+        'topk': {
+            'overall': {'hist': overall_hist_topk, **summarize_hist(overall_hist_topk)},
+            'per_expert': {},
+            'num_tokens_used': len(tokens_topk),
         },
     }
 
@@ -574,6 +597,12 @@ def analyze():
             'hist': hist,
             **summarize_hist(hist),
             'num_verbs_in_expert': len(per_expert_sets_plain[e]),
+        }
+    for e, hist in per_expert_hists_topk.items():
+        summary['topk']['per_expert'][str(e)] = {
+            'hist': hist,
+            **summarize_hist(hist),
+            'num_verbs_in_expert': len(per_expert_sets_topk[e]),
         }
 
     # Also compute frequency of exact top-n sets per expert for peakedness
@@ -590,6 +619,13 @@ def analyze():
         top5 = cnt.most_common(5)
         per_expert_combo_freq_plain[str(e)] = [("-".join(map(str, k)), v) for k, v in top5]
     summary['plain']['per_expert_combo_top5'] = per_expert_combo_freq_plain
+
+    per_expert_combo_freq_topk: Dict[str, List[Tuple[str, int]]] = {}
+    for e, sets in per_expert_sets_topk.items():
+        cnt = Counter(tuple(sorted(list(s))) for s in sets)
+        top5 = cnt.most_common(5)
+        per_expert_combo_freq_topk[str(e)] = [("-".join(map(str, k)), v) for k, v in top5]
+    summary['topk']['per_expert_combo_top5'] = per_expert_combo_freq_topk
 
         
     def plot_hist_overlay(hist_a, hist_b, labels, title, path):
@@ -672,8 +708,10 @@ def analyze():
 
     avg_scale = _avg_from_hist(overall_hist_scale)
     avg_plain = _avg_from_hist(overall_hist_plain)
+    avg_topk = _avg_from_hist(overall_hist_topk)
     print(f"Average overlap count (Scale): {avg_scale:.6f}")
     print(f"Average overlap count (Plain): {avg_plain:.6f}")
+    print(f"Average overlap count (TopK): {avg_topk:.6f}")
 
 
     

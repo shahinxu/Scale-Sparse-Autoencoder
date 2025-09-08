@@ -133,8 +133,8 @@ def main():
     width = 0.4
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(8, 8))
     
-    ax1.bar(x - width/2, in_max_ratio_list, width, label='in-expert', color='#337AFF', hatch='///')
-    ax1.bar(x + width/2, inter_max_ratio_list, width, label='inter-expert', color='#FF5733', hatch='\\\\\\')
+    ax1.bar(x - width/2, in_max_ratio_list, width, label='in-expert', color='#264653', hatch='///')
+    ax1.bar(x + width/2, inter_max_ratio_list, width, label='inter-expert', color='#2a9d8f', hatch='\\\\')
     ax1.set_xticks(x)
     ax1.set_xticklabels(activations)
     ax1.set_xlabel('# Experts')
@@ -144,8 +144,8 @@ def main():
     ax1.legend()
     ax1.grid(True, alpha=0.3, linestyle='--', linewidth=0.8)
     
-    ax2.bar(x - width/2, in_max_ratio_list, width, color='#337AFF', hatch='///')
-    ax2.bar(x + width/2, inter_max_ratio_list, width, color='#FF5733', hatch='\\\\\\')
+    ax2.bar(x - width/2, in_max_ratio_list, width, color='#264653', hatch='///')
+    ax2.bar(x + width/2, inter_max_ratio_list, width, color='#2a9d8f', hatch='\\\\')
     ax2.set_xticks(x)
     ax2.set_xticklabels(activations)
     ax2.set_xlabel('# Experts')
