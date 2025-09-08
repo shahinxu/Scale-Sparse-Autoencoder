@@ -24,7 +24,7 @@ plt.rcParams.update({
 
 GPU = "3"
 LAYER = 8
-E = 1
+E = 2
 k = 32
 SCALE_MODEL_PATH: Optional[str] = f"dictionaries/MultiExpert_Scale_{k}_64_{E}/{LAYER}.pt"
 PLAIN_MODEL_PATH: Optional[str] = f"dictionaries/MultiExpert_{k}_64_{E}/{LAYER}.pt"
@@ -32,7 +32,7 @@ TOPK_MODEL_PATH: Optional[str] = f"dictionaries/topk_{k}_8/{LAYER}.pt"
 
 OUTPUT_ROOT = f"feature_combo_overlap_both_{E}"
 
-TOP_N_FEATURES = 16
+TOP_N_FEATURES = 32
 NUM_PAST_VERBS = 1500
 SEED = 0
 XTICK_STEP = 8
@@ -637,9 +637,9 @@ def analyze():
         pa = [y / sa if sa > 0 else 0.0 for y in ya]
         pb = [y / sb if sb > 0 else 0.0 for y in yb]
         bw = 1
-        plt.figure(figsize=(8, 5))
-        plt.bar(xs, pa, width=bw, color='#337AFF', alpha=0.6, label=labels[0], align='center')
-        plt.bar(xs, pb, width=bw, color='#FF5733', alpha=0.6, label=labels[1], align='center')
+        plt.figure(figsize=(8, 8))
+        plt.bar(xs, pa, width=bw, color='#2a9d8f', alpha=0.8, label=labels[0], align='center')
+        plt.bar(xs, pb, width=bw, color='#e9c46a', alpha=0.8, label=labels[1], align='center')
         tick_pos = xs[::max(1, XTICK_STEP)]
         plt.xticks(tick_pos, tick_pos)
         plt.xlabel(f'# Overlaped Feature')
