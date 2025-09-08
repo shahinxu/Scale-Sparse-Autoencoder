@@ -58,7 +58,7 @@ with open("metrics_log.jsonl", "a") as f:
             k=trainer_config['k'], experts=trainer_config['experts'],
             e=trainer_config['e'], heaviside=trainer_config['heaviside'], device=device
         )
-        metrics = evaluate(ae, test_buffer, device=device, using_decompose=True)
+        metrics = evaluate(ae, buffer, device=device, using_decompose=True)
         safe_config = {k: (str(v) if callable(v) or isinstance(v, type) else v) for k, v in trainer_config.items()}
         record = {"trainer_config": safe_config, "metrics": metrics}
         f.write(json.dumps(record, ensure_ascii=False, default=str) + "\n")
@@ -79,7 +79,7 @@ wandb.finish()
 #             t.load(f"dictionaries/MultiExpert_Scale_{trainer_config['k']}_{trainer_config['experts']}_{trainer_config['e']}/8.pt")
 #         )
 #         ae.to(device)
-#         metrics = evaluate(ae, test_buffer, device=device)
+#         metrics = evaluate(ae, buffer, device=device)
 #         safe_config = {k: (str(v) if callable(v) or isinstance(v, type) else v) for k, v in trainer_config.items()}
 #         record = {"trainer_config": safe_config, "metrics": metrics}
 #         f.write(json.dumps(record, ensure_ascii=False, default=str) + "\n")
