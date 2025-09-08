@@ -14,31 +14,34 @@ expert_data = {
     16: [0.9020, 0.9420, 0.9650, 0.9680, 0.9731, 0.9750, 0.9760],
 }
 
-# 统一画图风格（与其它标准图一致）
+# 定义不同的marker形状和颜色
+markers = ['o', 's', '^', 'D', 'v']  # 圆形, 方形, 上三角, 菱形, 下三角
+colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd']
+
 plt.rcParams.update({
-    'font.size': 24,
-    'axes.labelsize': 24,
-    'xtick.labelsize': 22,
-    'ytick.labelsize': 22,
-    'legend.fontsize': 22,
+    'font.size': 22,
+    'axes.labelsize': 22,
+    'xtick.labelsize': 20,
+    'ytick.labelsize': 20,
+    'legend.fontsize': 20,
 })
 
 # 3. 创建图表（统一尺寸）
-plt.figure(figsize=(8, 5))
+plt.figure(figsize=(8, 8))
 
 # 4. 绘制每一条 expert 曲线
-for expert_count, frac_recovered_values in expert_data.items():
+for i, (expert_count, frac_recovered_values) in enumerate(expert_data.items()):
     plt.plot(
         k_values,
         frac_recovered_values,
-        marker='o',
-        markersize=7,
-        linewidth=3,
+        marker=markers[i],
         linestyle='-',
+        linewidth=3,
+        color=colors[i],
+        markersize=12,
         label=f'{expert_count} experts'
     )
 
-# 5. 设置图表属性（移除标题，统一标签字号由 rcParams 控制）
 plt.xlabel('Sparsity (L0)')
 plt.ylabel('Loss Recovered')
 
@@ -50,10 +53,9 @@ ax.xaxis.set_major_formatter(mticker.LogFormatterMathtext(base=10.0))
 ax.xaxis.set_minor_locator(mticker.NullLocator())
 
 # 图例放在右下角
-plt.legend(loc='lower right', frameon=False)
+plt.legend(loc='lower right')
 
-# 显示网格线（仅 y 轴，统一风格）
-plt.grid(True, axis='y', alpha=0.3)
+plt.grid(True, alpha=0.3, linestyle='--', linewidth=0.8)
 
 # 6. 保存图表为 PNG 文件（统一文件名与导出参数）
 plt.savefig('ablation_multi_expert_recovered.png', dpi=300, bbox_inches='tight')

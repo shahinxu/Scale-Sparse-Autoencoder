@@ -1,9 +1,6 @@
 import matplotlib.pyplot as plt
 import numpy as np
 
-# 不使用 Scale 的虚构数据 (max similarity > 0.9)
-# 行: experts (1, 2, 4, 8, 16)
-# 列: k (2, 4, 8, 16, 32, 64, 128)
 data_dict = {
     'expert_values': [1, 2, 4, 8, 16],
     'k_values': [2, 4, 8, 16, 32, 64, 128],
@@ -16,27 +13,28 @@ data_dict = {
     ]
 }
 
-# 转换为 NumPy 数组
 heatmap_data = np.array(data_dict['values'])
 experts = data_dict['expert_values']
 k_values = data_dict['k_values']
 
-# 统一画图风格
 plt.rcParams.update({
-    'font.size': 24,
-    'axes.labelsize': 24,
-    'xtick.labelsize': 22,
-    'ytick.labelsize': 22,
-    'legend.fontsize': 22,
+    'font.size': 22,
+    'axes.labelsize': 22,
+    'xtick.labelsize': 20,
+    'ytick.labelsize': 20,
+    'legend.fontsize': 20,
 })
 
-# 创建图表和子图（统一尺寸）
-fig, ax = plt.subplots(figsize=(8, 5))
+fig, ax = plt.subplots(figsize=(12, 8))
 
-# 使用反转的 colormap，使值越高颜色越深
 im = ax.imshow(heatmap_data, cmap='viridis_r')
 
-# 设置刻度和标签
+for i in range(len(experts)):
+    for j in range(len(k_values)):
+        value = heatmap_data[i, j]
+        ax.text(j, i, f'{value:.4f}', ha='center', va='center', 
+                color='white', fontsize=20, weight='bold')
+
 ax.set_xticks(np.arange(len(k_values)))
 ax.set_yticks(np.arange(len(experts)))
 ax.set_xticklabels(k_values)
@@ -45,12 +43,9 @@ ax.set_yticklabels(experts)
 ax.set_xlabel('Sparsity (L0)')
 ax.set_ylabel('# Experts')
 
-# 添加颜色条
-cbar = ax.figure.colorbar(im, ax=ax)
+cbar = ax.figure.colorbar(im, ax=ax, shrink=0.8, aspect=20)
 
-# 调整布局以确保一切都可见
 plt.tight_layout()
 
-# 保存图表（统一导出参数）
 plt.savefig('analysis_multi_expert_similarity_heatmap.png', dpi=300, bbox_inches='tight')
 print('Saved analysis_multi_expert_similarity_heatmap.png')

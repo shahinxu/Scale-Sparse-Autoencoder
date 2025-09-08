@@ -38,51 +38,43 @@ with_scale_recovered = np.array([d[1] for d in with_scale_expert_8_data['data']]
 
 # 统一画图风格（全局字体）
 plt.rcParams.update({
-    'font.size': 24,
-    'axes.labelsize': 24,
-    'xtick.labelsize': 22,
-    'ytick.labelsize': 22,
-    'legend.fontsize': 22,
+    'font.size': 22,
+    'axes.labelsize': 22,
+    'xtick.labelsize': 20,
+    'ytick.labelsize': 20,
+    'legend.fontsize': 20,
 })
 
-plt.figure(figsize=(8, 5))
-plt.plot(k_values, no_scale_mse, marker='o', markersize=7, linewidth=3, linestyle='-', label='Plain')
-plt.plot(k_values, with_scale_mse, marker='s', markersize=7, linewidth=3, linestyle='-', label='Scale')
-plt.xlabel('Sparsity (L0)')
-plt.ylabel('MSE')
+# 设置柱状图的位置
+x = np.arange(len(k_values))
+width = 0.35
 
-# Y 轴以千为单位显示
-ax = plt.gca()
+fig, ax1 = plt.subplots(figsize=(10, 6))
 
-# X 轴使用以10为底的对数刻度，显示为 10^n
-ax.set_xscale('log', base=10)
-ax.xaxis.set_major_locator(mticker.LogLocator(base=10.0))
-ax.xaxis.set_major_formatter(mticker.LogFormatterMathtext(base=10.0))
-ax.xaxis.set_minor_locator(mticker.NullLocator())
+rects1 = ax1.bar(x - width/2, no_scale_mse, width, label='Plain', color='#FF5733', alpha=0.8, hatch='///')
+rects2 = ax1.bar(x + width/2, with_scale_mse, width, label='Scale', color='#337AFF', alpha=0.8, hatch='\\\\')
 
-plt.legend(loc='upper right', frameon=False)
+ax1.set_xlabel('Sparsity (L0)')
+ax1.set_ylabel('MSE', color='black')
 
-plt.grid(True, axis='y', alpha=0.3)
+ax1.set_xticks(x)
+ax1.set_xticklabels([f'$10^{{{int(np.log10(k))}}}$' if k in [1, 10, 100, 1000] else str(k) for k in k_values])
+ax1.set_ylim(2000, 16000)
+ax1.grid(axis='y', alpha=0.3)
 
-plt.savefig('ablation_scale_vary_sparsity_mse.png', dpi=300, bbox_inches='tight')
-print('Saved ablation_scale_vary_sparsity_mse.png')
-plt.close()
+ax2 = ax1.twinx()
 
-plt.figure(figsize=(8, 5))
-plt.plot(k_values, no_scale_recovered, marker='o', markersize=7, linewidth=3, linestyle='-', label='Plain')
-plt.plot(k_values, with_scale_recovered, marker='s', markersize=7, linewidth=3, linestyle='-', label='Scale')
-plt.xlabel('Sparsity (L0)')
-plt.ylabel('Loss Recovered')
+rects3 = ax2.bar(x - width/2, no_scale_recovered, width, color='#FF5733', alpha=0.8, hatch='///')
+rects4 = ax2.bar(x + width/2, with_scale_recovered, width, color='#337AFF', alpha=0.8, hatch='\\\\')
 
-ax = plt.gca()
-ax.set_xscale('log', base=10)
-ax.xaxis.set_major_locator(mticker.LogLocator(base=10.0))
-ax.xaxis.set_major_formatter(mticker.LogFormatterMathtext(base=10.0))
-ax.xaxis.set_minor_locator(mticker.NullLocator())
+ax2.set_ylabel('Loss Recovered', color='black')
+ax2.set_ylim(1, 0.86)
+ax2.invert_yaxis()
 
-plt.legend(loc='lower right', frameon=False)
-plt.grid(True, axis='y', alpha=0.3)
+mse_min, mse_max = ax1.get_ylim()
+ax2.set_ylim(1.0, 0.86)
 
-plt.savefig('ablation_scale_vary_sparsity_recovered.png', dpi=300, bbox_inches='tight')
-print('Saved ablation_scale_vary_sparsity_recovered.png')
-plt.close()
+ax1.legend(loc='lower left', frameon=True)
+
+plt.savefig('ablation_scale_vary_sparsity_combined.png', dpi=300, bbox_inches='tight')
+print('Saved ablation_scale_vary_sparsity_combined.png')

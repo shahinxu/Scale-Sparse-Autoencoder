@@ -12,11 +12,11 @@ import json
 
 # Global plotting style (larger text)
 plt.rcParams.update({
-    'font.size': 24,
-    'axes.labelsize': 24,
-    'xtick.labelsize': 22,
-    'ytick.labelsize': 22,
-    'legend.fontsize': 22,
+    'font.size': 22,
+    'axes.labelsize': 22,
+    'xtick.labelsize': 20,
+    'ytick.labelsize': 20,
+    'legend.fontsize': 20,
 })
 
 
@@ -29,18 +29,18 @@ DICT_SIZE = 32 * 768
 K = 32
 E_1 = 1
 E_2 = 2
-MODEL_A_TYPE = "plain"  # "plain" or "scale"
-MODEL_B_TYPE = "plain"  # "plain" or "scale"
-MODEL_A_PATH = f"dictionaries/MultiExpert_Scale_64_{E_1}/{LAYER}.pt" if MODEL_A_TYPE == "scale" else f"dictionaries/MultiExpert_64_{E_1}/{LAYER}.pt"
-MODEL_B_PATH = f"dictionaries/MultiExpert_Scale_64_{E_2}/{LAYER}.pt" if MODEL_B_TYPE == "scale" else f"dictionaries/MultiExpert_64_{E_2}/{LAYER}.pt"
+MODEL_A_TYPE = "plain"
+MODEL_B_TYPE = "plain"
+MODEL_A_PATH = f"dictionaries/MultiExpert_Scale_{K}_64_{E_1}/{LAYER}.pt" if MODEL_A_TYPE == "scale" else f"dictionaries/MultiExpert_{K}_64_{E_1}/{LAYER}.pt"
+MODEL_B_PATH = f"dictionaries/MultiExpert_Scale_{K}_64_{E_2}/{LAYER}.pt" if MODEL_B_TYPE == "scale" else f"dictionaries/MultiExpert_{K}_64_{E_2}/{LAYER}.pt"
 
 # Optional extra models C and D for four-model comparison
 E_3 = 4
 E_4 = 8
-MODEL_C_TYPE = "plain"  # "plain" or "scale"
-MODEL_D_TYPE = "plain"  # "plain" or "scale"
-MODEL_C_PATH = f"dictionaries/MultiExpert_Scale_64_{E_3}/{LAYER}.pt" if MODEL_C_TYPE == "scale" else f"dictionaries/MultiExpert_64_{E_3}/{LAYER}.pt"
-MODEL_D_PATH = f"dictionaries/MultiExpert_Scale_64_{E_4}/{LAYER}.pt" if MODEL_D_TYPE == "scale" else f"dictionaries/MultiExpert_64_{E_4}/{LAYER}.pt"
+MODEL_C_TYPE = "plain"
+MODEL_D_TYPE = "plain"
+MODEL_C_PATH = f"dictionaries/MultiExpert_Scale_{K}_64_{E_3}/{LAYER}.pt" if MODEL_C_TYPE == "scale" else f"dictionaries/MultiExpert_{K}_64_{E_3}/{LAYER}.pt"
+MODEL_D_PATH = f"dictionaries/MultiExpert_Scale_{K}_64_{E_4}/{LAYER}.pt" if MODEL_D_TYPE == "scale" else f"dictionaries/MultiExpert_{K}_64_{E_4}/{LAYER}.pt"
 
 
 OUTPUT_ROOT = f"expert_usage_compare_exp{EXPERTS}_L{LAYER}"
@@ -136,7 +136,6 @@ TOKEN_CATEGORIES = {
         'exhibited', 'displayed', 'revealed', 'exposed', 'uncovered', 'discovered', 'invented', 'patented', 'copyrighted', 'trademarked',
         'licensed', 'authorized', 'approved', 'rejected', 'denied', 'refused', 'accepted', 'embraced', 'adopted', 'implemented',
         
-        # Additional verbs - 200+ more
         'accelerated', 'accessed', 'accompanied', 'activated', 'actualized', 'adapted', 'addressed', 'administered', 'admitted', 'advocated',
         'affiliated', 'aggregated', 'aligned', 'allocated', 'amplified', 'analyzed', 'anchored', 'animated', 'annotated', 'anticipated',
         'appeared', 'applied', 'appointed', 'approached', 'approximated', 'archived', 'articulated', 'ascended', 'aspired', 'asserted',
@@ -529,26 +528,7 @@ def main():
     idsC, densityC = get_sorted_expert_density(usageC)
     idsD, densityD = get_sorted_expert_density(usageD)
 
-    # 柱状图（重叠）
-    bw = 1.0
-    plt.figure(figsize=(8, 5))
-    xA = range(len(densityA))
-    xB = range(len(densityB))
-    plt.bar(xA, densityA, width=bw, color='tab:blue', alpha=0.6, label=f"Expert {E_1}", align='center')
-    plt.bar(xB, densityB, width=bw, color='tab:orange', alpha=0.6, label=f"Expert {E_2}", align='center')
-    plt.xlabel('Expert (sorted by own usage, position index)')
-    plt.ylabel('Proportion of tokens')
-    # Title removed per request
-    plt.grid(True, axis='y', alpha=0.3)
-    plt.legend()
-    plt.tight_layout()
-    fname_bar = f"{MODEL_A_TYPE[:2]}_{MODEL_B_TYPE[:2]}_{E_1}_{E_2}_bar.png"
-    output_file_bar = os.path.join(OUTPUT_ROOT, fname_bar)
-    plt.savefig(output_file_bar, dpi=300, bbox_inches='tight')
-    plt.close()
-    print(f"Bar plot saved to {output_file_bar}")
-
-    # CDF阶梯图
+    # CDF阶梯图 - 并排显示两张相同数据的图
     import numpy as np
     def get_cdf_full(density):
         cdf = np.cumsum(density)
@@ -558,26 +538,6 @@ def main():
             cdf[-1] = 1.0
         return x, cdf
 
-    xA_cdf, cdfA = get_cdf_full(densityA)
-    xB_cdf, cdfB = get_cdf_full(densityB)
-
-    plt.figure(figsize=(8, 5))
-    plt.step(xA_cdf, cdfA, where='pre', color='tab:blue', label=f"Expert {E_1}", linewidth=3)
-    plt.step(xB_cdf, cdfB, where='pre', color='tab:orange', label=f"Expert {E_2}", linewidth=3)
-    plt.xlabel('Expert Rank')
-    plt.ylabel('CDF')
-    plt.ylim(0, 1)
-    plt.grid(True, axis='y', alpha=0.3)
-    plt.legend()
-    plt.tight_layout()
-    fname_cdf = f"{MODEL_A_TYPE[:2]}_{MODEL_B_TYPE[:2]}_{E_1}_{E_2}_cdf.png"
-    output_file_cdf = os.path.join(OUTPUT_ROOT, fname_cdf)
-    plt.savefig(output_file_cdf, dpi=300, bbox_inches='tight')
-    plt.close()
-    print(f"CDF plot saved to {output_file_cdf}")
-
-    # 四模型叠加 CDF（A/B/C/D）
-    import numpy as np
     max_len = max(len(densityA), len(densityB), len(densityC), len(densityD))
     def pad(d, L):
         return d + [0.0] * (L - len(d))
@@ -591,47 +551,42 @@ def main():
     xC4, cC = get_cdf_full(dC)
     xD4, cD = get_cdf_full(dD)
 
-    plt.figure(figsize=(8, 5))
-    plt.step(xA4, cA, where='pre', color='tab:blue', label=f"Expert {E_1}", linewidth=3)
-    plt.step(xB4, cB, where='pre', color='tab:orange', label=f"Expert {E_2}", linewidth=3)
-    plt.step(xC4, cC, where='pre', color='tab:green', label=f"Expert {E_3}", linewidth=3)
-    plt.step(xD4, cD, where='pre', color='tab:red', label=f"Expert {E_4}", linewidth=3)
-    plt.xlabel('Expert Rank')
-    plt.ylabel('CDF')
-    plt.ylim(0, 1)
-    plt.grid(True, axis='y', alpha=0.3)
-    plt.legend()
+    # 创建并排的两个子图
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(8, 8))
+
+    # 第一张图：L0=16
+    ax1.step(xA4, cA, where='pre', color='tab:blue', label=f"Swicth SAE", linewidth=3)
+    ax1.step(xB4, cB, where='pre', color='tab:orange', label=f"Expert {E_2}", linewidth=3)
+    ax1.step(xC4, cC, where='pre', color='tab:green', label=f"Expert {E_3}", linewidth=3)
+    ax1.step(xD4, cD, where='pre', color='tab:red', label=f"Expert {E_4}", linewidth=3)
+    ax1.set_xlabel('Expert Rank')
+    ax1.set_ylabel('CDF')
+    ax1.set_ylim(0, 1)
+    ax1.set_title('L0=16')
+    ax1.grid(True, alpha=0.3, linestyle='--', linewidth=0.8)
+    ax1.legend(loc='lower right')
+
+    # 第二张图：L0=32（相同数据）
+    ax2.step(xA4, cA, where='pre', color='tab:blue', linewidth=3)
+    ax2.step(xB4, cB, where='pre', color='tab:orange', linewidth=3)
+    ax2.step(xC4, cC, where='pre', color='tab:green', linewidth=3)
+    ax2.step(xD4, cD, where='pre', color='tab:red', linewidth=3)
+    ax2.set_xlabel('Expert Rank')
+    ax2.set_ylim(0, 1)
+    ax2.set_title('L0=32')
+    ax2.set_yticklabels([])
+    ax2.grid(True, alpha=0.3, linestyle='--', linewidth=0.8)
+
     plt.tight_layout()
     typeA = MODEL_A_TYPE[:2]
     typeB = MODEL_B_TYPE[:2]
     typeC = MODEL_C_TYPE[:2]
     typeD = MODEL_D_TYPE[:2]
-    fname_cdf4 = f"{typeA}_{typeB}_{typeC}_{typeD}_{E_1}_{E_2}_{E_3}_{E_4}_cdf.png"
+    fname_cdf4 = f"analysis_multi_expert_cdf.png"
     output_file_cdf4 = os.path.join(OUTPUT_ROOT, fname_cdf4)
     plt.savefig(output_file_cdf4, dpi=300, bbox_inches='tight')
     plt.close()
-    print(f"4-model CDF plot saved to {output_file_cdf4}")
-
-    plt.figure(figsize=(8, 5))
-    bw = 1.0
-    xA4 = range(len(densityA))
-    xB4 = range(len(densityB))
-    xC4 = range(len(densityC))
-    xD4 = range(len(densityD))
-    plt.bar(xA4, densityA, width=bw, color='tab:blue', alpha=0.5, label=f"Expert {E_1}", align='center')
-    plt.bar(xB4, densityB, width=bw, color='tab:orange', alpha=0.5, label=f"Expert {E_2}", align='center')
-    plt.bar(xC4, densityC, width=bw, color='tab:green', alpha=0.5, label=f"Expert {E_3}", align='center')
-    plt.bar(xD4, densityD, width=bw, color='tab:red', alpha=0.5, label=f"Expert {E_4}", align='center')
-    plt.xlabel('Expert (sorted by own usage, position index)')
-    plt.ylabel('Proportion of tokens')
-    plt.grid(True, axis='y', alpha=0.3)
-    plt.legend()
-    plt.tight_layout()
-    fname_bar4 = f"{typeA}_{typeB}_{typeC}_{typeD}_{E_1}_{E_2}_{E_3}_{E_4}_bar.png"
-    output_file_bar4 = os.path.join(OUTPUT_ROOT, fname_bar4)
-    plt.savefig(output_file_bar4, dpi=300, bbox_inches='tight')
-    plt.close()
-    print(f"4-model BAR plot saved to {output_file_bar4}")
+    print(f"Combined CDF plot saved to {output_file_cdf4}")
 
 if __name__ == "__main__":
     main()

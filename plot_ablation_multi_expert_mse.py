@@ -1,11 +1,8 @@
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
-import numpy as np
 
-# 收集所有 k 值下的数据
 k_values = [2, 4, 8, 16, 32, 64, 128]
 
-# 专家数量为 expert 的数据，每个列表中的值对应 k_values 中的一个
 expert_data = {
     1: [18000, 17000, 16000, 15000, 13091.416, 12000, 10000],
     2: [4000, 3800, 3600, 3400, 3347.2798, 3200, 3000],
@@ -14,29 +11,32 @@ expert_data = {
     16: [4100, 3900, 3700, 3500, 3637.6928, 3300, 3100],
 }
 
-# 统一画图风格（与 plot_multi_expert.py 一致）
+# 定义不同的marker形状和颜色
+markers = ['o', 's', '^', 'D', 'v']  # 圆形, 方形, 上三角, 菱形, 下三角
+colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd']
+
 plt.rcParams.update({
-    'font.size': 24,
-    'axes.labelsize': 24,
-    'xtick.labelsize': 22,
-    'ytick.labelsize': 22,
-    'legend.fontsize': 22,
+    'font.size': 22,
+    'axes.labelsize': 22,
+    'xtick.labelsize': 20,
+    'ytick.labelsize': 20,
+    'legend.fontsize': 20,
 })
 
-# 创建图表（统一尺寸）
-plt.figure(figsize=(8, 5))
+plt.figure(figsize=(8, 8))
 
-# 绘制每一条 expert 折线
-for expert_count, mse_values in expert_data.items():
+for i, (expert_count, mse_values) in enumerate(expert_data.items()):
     plt.plot(
         k_values,
         mse_values,
-        marker='o',
+        marker=markers[i],
         linestyle='-',
+        linewidth=3,
+        color=colors[i],
+        markersize=12,  # 调整marker大小
         label=f'{expert_count} experts'
     )
 
-# 坐标轴标签（标题移除以统一风格）
 plt.xlabel('Sparsity (L0)')
 plt.ylabel('MSE')
 
@@ -46,14 +46,16 @@ ax.xaxis.set_major_locator(mticker.LogLocator(base=10.0))
 ax.xaxis.set_major_formatter(mticker.LogFormatterMathtext(base=10.0))
 ax.xaxis.set_minor_locator(mticker.NullLocator())
 
-plt.legend(frameon=False)
+ax.set_yscale('log', base=10)
+ax.yaxis.set_major_locator(mticker.LogLocator(base=10.0))
+ax.yaxis.set_major_formatter(mticker.LogFormatterMathtext(base=10.0))
+ax.yaxis.set_minor_locator(mticker.NullLocator())
 
-# 网格风格统一
-plt.grid(True, axis='y', alpha=0.3)
+plt.legend(loc='center left', frameon=True)
 
-# 保存到文件（统一导出参数）
+plt.grid(True, alpha=0.3, linestyle='--', linewidth=0.8)
+
 plt.savefig('ablation_multi_expert_recon_mse.png', dpi=300, bbox_inches='tight')
 print('Saved ablation_multi_expert_recon_mse.png')
 
-# 显示图表
 plt.show()

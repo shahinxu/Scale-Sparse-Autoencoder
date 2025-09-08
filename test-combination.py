@@ -1,10 +1,7 @@
 import os
-import json
 import math
 import random
-import re
 from collections import Counter, defaultdict
-import csv
 from typing import Dict, List, Optional, Sequence, Tuple
 
 import torch as t
@@ -17,23 +14,23 @@ from config import lm
 import matplotlib.pyplot as plt
 
 plt.rcParams.update({
-    'font.size': 24,
-    'axes.labelsize': 24,
-    'xtick.labelsize': 22,
-    'ytick.labelsize': 22,
-    'legend.fontsize': 22,
+    'font.size': 22,
+    'axes.labelsize': 22,
+    'xtick.labelsize': 20,
+    'ytick.labelsize': 20,
+    'legend.fontsize': 20,
 })
 
-GPU = "0"
+GPU = "3"
 LAYER = 8
-E = 2
+E = 1
 k = 32
 SCALE_MODEL_PATH: Optional[str] = f"dictionaries/MultiExpert_Scale_{k}_64_{E}/{LAYER}.pt"
 PLAIN_MODEL_PATH: Optional[str] = f"dictionaries/MultiExpert_{k}_64_{E}/{LAYER}.pt"
 
 OUTPUT_ROOT = f"feature_combo_overlap_both_{E}"
 
-TOP_N_FEATURES = 32
+TOP_N_FEATURES = 16
 NUM_PAST_VERBS = 1500
 SEED = 0
 XTICK_STEP = 8

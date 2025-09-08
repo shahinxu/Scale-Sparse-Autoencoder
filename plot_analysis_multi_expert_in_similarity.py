@@ -8,11 +8,11 @@ import csv
 GPU = "5"
 
 plt.rcParams.update({
-    'font.size': 24,
-    'axes.labelsize': 24,
-    'xtick.labelsize': 22,
-    'ytick.labelsize': 22,
-    'legend.fontsize': 22,
+    'font.size': 22,
+    'axes.labelsize': 22,
+    'xtick.labelsize': 20,
+    'ytick.labelsize': 20,
+    'legend.fontsize': 20,
 })
 
 
@@ -130,55 +130,34 @@ def main():
     draw_lollipop_single(x, inter_max_mean_arr, in_max_mean_arr, activations, 'Max Similarity', 'Mean Similarity', 'expert_feature_similarity_max_mean_lollipop.png')
     draw_lollipop_single(x, inter_max_ratio_arr, in_max_ratio_arr, activations, 'Ratio', 'Ratio', 'expert_feature_similarity_max_mean_ratio_lollipop.png')
 
-    width = 0.35
-    # mean bar
-    # plt.figure(figsize=(8,5))
-    # plt.bar(x - width/2, in_mean_list, width, label='in-expert', color='C0')
-    # plt.bar(x + width/2, inter_mean_list, width, label='inter-expert', color='C1')
-    # plt.xticks(x, activations)
-    # plt.xlabel('# Experts')
-    # plt.ylabel('Mean Similairty')
-    # plt.legend()
-    # plt.grid(True, axis='y', alpha=0.3)
-    # plt.tight_layout()
-    # plt.savefig('expert_feature_similarity_mean_bar.png', dpi=300, bbox_inches='tight')
-    # plt.close()
-    # # max mean bar
-    # plt.figure(figsize=(8,5))
-    # plt.bar(x - width/2, in_max_mean_list, width, label='in-expert', color='C0')
-    # plt.bar(x + width/2, inter_max_mean_list, width, label='inter-expert', color='C1')
-    # plt.xticks(x, activations)
-    # plt.xlabel('# Experts')
-    # plt.ylabel('Max Similarity')
-    # plt.legend()
-    # plt.grid(True, axis='y', alpha=0.3)
-    # plt.tight_layout()
-    # plt.savefig('expert_feature_similarity_max_mean_bar.png', dpi=300, bbox_inches='tight')
-    # plt.close()
-    # max mean>0.9 ratio bar
-    plt.figure(figsize=(8,5))
-    plt.bar(x - width/2, in_max_ratio_list, width, label='in-expert', color='#337AFF')
-    plt.bar(x + width/2, inter_max_ratio_list, width, label='inter-expert', color='#FF5733')
-    plt.xticks(x, activations)
-    plt.xlabel('# Experts')
-    plt.ylabel('Ratio')
-    plt.legend()
-    plt.grid(True, axis='y', alpha=0.3)
+    width = 0.4
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(8, 8))
+    
+    ax1.bar(x - width/2, in_max_ratio_list, width, label='in-expert', color='#337AFF', hatch='///')
+    ax1.bar(x + width/2, inter_max_ratio_list, width, label='inter-expert', color='#FF5733', hatch='\\\\\\')
+    ax1.set_xticks(x)
+    ax1.set_xticklabels(activations)
+    ax1.set_xlabel('# Experts')
+    ax1.set_ylabel('Ratio')
+    ax1.set_ylim(0, 0.006)
+    ax1.set_title('L0=16')
+    ax1.legend()
+    ax1.grid(True, alpha=0.3, linestyle='--', linewidth=0.8)
+    
+    ax2.bar(x - width/2, in_max_ratio_list, width, color='#337AFF', hatch='///')
+    ax2.bar(x + width/2, inter_max_ratio_list, width, color='#FF5733', hatch='\\\\\\')
+    ax2.set_xticks(x)
+    ax2.set_xticklabels(activations)
+    ax2.set_xlabel('# Experts')
+    ax2.set_ylim(0, 0.006)
+    ax2.set_title('L0=32')
+    ax2.set_yticklabels([])
+    ax2.grid(True, alpha=0.3, linestyle='--', linewidth=0.8)
+    
     plt.tight_layout()
     plt.savefig('analysis_multi_expert_ratio_bar.png', dpi=300, bbox_inches='tight')
+    print("Saved analysis_multi_expert_ratio_bar.png")
     plt.close()
-
-    # write results to CSV
-    csv_path = 'expert_feature_similarity_results.csv'
-    with open(csv_path, 'w', newline='') as csvfile:
-        writer = csv.writer(csvfile)
-        writer.writerow(['activation', 'metric', 'in_expert', 'inter_expert', 'delta'])
-        for i, act in enumerate(activations):
-            writer.writerow([act, 'mean', float(in_mean_list[i]), float(inter_mean_list[i]), float(in_mean_list[i] - inter_mean_list[i])])
-            writer.writerow([act, 'max_mean', float(in_max_mean_list[i]), float(inter_max_mean_list[i]), float(in_max_mean_list[i] - inter_max_mean_list[i])])
-            writer.writerow([act, 'max_mean_ratio', float(in_max_ratio_list[i]), float(inter_max_ratio_list[i]), float(in_max_ratio_list[i] - inter_max_ratio_list[i])])
-
-    print(f'Lollipop plots saved and CSV written to {csv_path}')
 
 if __name__ == "__main__":
     main()

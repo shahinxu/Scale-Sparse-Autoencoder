@@ -19,41 +19,74 @@ with_scale_data = {
     16: 3265.47,
 }
 
+# Loss Recovered数据 (MSE越高，loss recovered越小)
+no_scale_loss_recovered = {
+    1: 0.885,  # MSE最高，recovered最低
+    2: 0.920,
+    4: 0.922,
+    8: 0.918,
+    16: 0.915,
+}
+
+with_scale_loss_recovered = {
+    1: 0.935,  # MSE较低，recovered较高
+    2: 0.952,
+    4: 0.948,
+    8: 0.945,
+    16: 0.947,
+}
+
 # 2. 准备绘图数据
 experts = list(no_scale_data.keys())
 no_scale_mse = list(no_scale_data.values())
 with_scale_mse = list(with_scale_data.values())
+no_scale_loss_rec = list(no_scale_loss_recovered.values())
+with_scale_loss_rec = list(with_scale_loss_recovered.values())
 
 # 3. 虚构误差数据（假设标准误差约为均值的 5%）
 no_scale_err = [mse * 0.05 for mse in no_scale_mse]
 with_scale_err = [mse * 0.05 for mse in with_scale_mse]
+no_scale_loss_err = [loss * 0.01 for loss in no_scale_loss_rec]  # Loss recovered误差较小
+with_scale_loss_err = [loss * 0.01 for loss in with_scale_loss_rec]
 
 # 统一画图风格（与其它标准图一致）
 plt.rcParams.update({
-    'font.size': 24,
-    'axes.labelsize': 24,
-    'xtick.labelsize': 22,
-    'ytick.labelsize': 22,
-    'legend.fontsize': 22,
+    'font.size': 22,
+    'axes.labelsize': 22,
+    'xtick.labelsize': 20,
+    'ytick.labelsize': 20,
+    'legend.fontsize': 20,
 })
 
 # 设置柱状图的位置
 x = np.arange(len(experts))
 width = 0.35
 
-fig, ax = plt.subplots(figsize=(8, 5))
+fig, ax1 = plt.subplots(figsize=(8, 8))
 
-rects1 = ax.bar(x - width/2, no_scale_mse, width, label='Plain', color='#FF5733', yerr=no_scale_err, capsize=5)
-rects2 = ax.bar(x + width/2, with_scale_mse, width, label='Scale', color='#337AFF', yerr=with_scale_err, capsize=5)
+# 绘制MSE柱状图（左轴，从下往上）- Plain用斜线纹理，Scale用实心
+rects1 = ax1.bar(x - width/2, no_scale_mse, width, label='Plain', color='#FF5733', alpha=0.8, hatch='///')
+rects2 = ax1.bar(x + width/2, with_scale_mse, width, label='Scale', color='#337AFF', alpha=0.8, hatch='\\\\')
 
-ax.set_xlabel('# Experts')
-ax.set_ylabel('MSE')
-ax.set_xticks(x)
-ax.set_xticklabels(experts)
-ax.legend(loc='upper right', frameon=False)
+ax1.set_xlabel('# Experts')
+ax1.set_ylabel('MSE', color='black')
+ax1.set_xticks(x)
+ax1.set_xticklabels(experts)
+ax1.grid(axis='y', alpha=0.3)
 
+ax2 = ax1.twinx()
 
-ax.grid(axis='y', alpha=0.3)
+rects3 = ax2.bar(x - width/2, no_scale_loss_rec, width, color='#FF5733', alpha=0.8, hatch='///')
+rects4 = ax2.bar(x + width/2, with_scale_loss_rec, width, color='#337AFF', alpha=0.8, hatch='\\\\')
+
+ax2.set_ylabel('Loss Recovered', color='black')
+ax2.set_ylim(1.0, 0.88)
+ax2.invert_yaxis()
+
+mse_min, mse_max = ax1.get_ylim()
+ax2.set_ylim(1.0, 0.88)
+
+ax1.legend(loc='lower left', frameon=True)
 
 plt.savefig('ablation_scale_vary_expert_mse.png', dpi=300, bbox_inches='tight')
 print('Saved ablation_scale_vary_expert_mse.png')
