@@ -23,7 +23,7 @@ data = {
 
 x_indices = np.arange(len(quantile_labels))
 
-plt.figure(figsize=(8, 8))
+plt.figure(figsize=(12, 8))
 
 for i, (model, values) in enumerate(data.items()):
     plt.plot(

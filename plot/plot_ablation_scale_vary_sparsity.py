@@ -49,7 +49,7 @@ plt.rcParams.update({
 x = np.arange(len(k_values))
 width = 0.4
 
-fig, ax1 = plt.subplots(figsize=(8, 8))
+fig, ax1 = plt.subplots(figsize=(12, 8))
 
 rects1 = ax1.bar(x - width/2, no_scale_mse, width, label='Plain', color='#264653', hatch='///')
 rects2 = ax1.bar(x + width/2, with_scale_mse, width, label='Scale', color='#2a9d8f', hatch='\\\\')
@@ -76,5 +76,5 @@ ax2.set_ylim(1.0, 0.86)
 
 ax1.legend(loc='lower left', frameon=True)
 
-plt.savefig('ablation_scale_vary_sparsity_combined.png', dpi=300, bbox_inches='tight')
-print('Saved ablation_scale_vary_sparsity_combined.png')
+plt.savefig('ablation_scale_vary_sparsity.png', dpi=300, bbox_inches='tight')
+print('Saved ablation_scale_vary_sparsity.png')

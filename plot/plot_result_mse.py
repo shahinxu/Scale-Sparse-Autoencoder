@@ -21,7 +21,7 @@ data = {
     'ReLU SAE': [15200.00, 7100.00, 5400.00, 4800.00, 4500.00, 4300.00, 4150.00]
 }
 
-plt.figure(figsize=(8, 8))
+plt.figure(figsize=(12, 8))
 
 for i, (model, mse_values) in enumerate(data.items()):
     plt.plot(

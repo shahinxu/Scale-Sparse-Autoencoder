@@ -1,9 +1,7 @@
-
 import torch as t
 import numpy as np
 from dictionary_learning.trainers.moe_physically import MultiExpertAutoEncoder
 import matplotlib.pyplot as plt
-import csv
 
 GPU = "5"
 
@@ -101,37 +99,8 @@ def main():
 
     x = np.arange(len(activations))
 
-    def draw_lollipop_single(x, inter_vals, in_vals, activations, title, ylabel, outpath):
-        plt.figure(figsize=(8,5))
-        for xi, inter_v, in_v in zip(x, inter_vals, in_vals):
-            plt.plot([xi, xi], [inter_v, in_v], color='gray', linewidth=3, zorder=1)
-            plt.scatter(xi, inter_v, color='C1', s=100, zorder=2, label='inter-expert' if xi==0 else '')
-            plt.scatter(xi, in_v, color='C0', s=100, zorder=3, label='in-expert' if xi==0 else '')
-            delta = in_v - inter_v
-            y_annot = max(inter_v, in_v) + 0.01 * (abs(max(inter_vals.max(), in_vals.max())) + 1e-8)
-            plt.text(xi, y_annot, f'{delta:.3f}', ha='center', va='bottom', fontsize=12, color='black')
-        plt.xticks(x, activations)
-        plt.xlabel('activation')
-        plt.ylabel(ylabel)
-        plt.legend()
-        plt.grid(axis='y', alpha=0.3)
-        plt.tight_layout()
-        plt.savefig(outpath, dpi=300, bbox_inches='tight')
-        plt.close()
-
-    in_mean_arr = np.array(in_mean_list)
-    inter_mean_arr = np.array(inter_mean_list)
-    in_max_mean_arr = np.array(in_max_mean_list)
-    inter_max_mean_arr = np.array(inter_max_mean_list)
-    in_max_ratio_arr = np.array(in_max_ratio_list)
-    inter_max_ratio_arr = np.array(inter_max_ratio_list)
-
-    draw_lollipop_single(x, inter_mean_arr, in_mean_arr, activations, 'Mean Similarity', 'Mean Similarity', 'expert_feature_similarity_mean_lollipop.png')
-    draw_lollipop_single(x, inter_max_mean_arr, in_max_mean_arr, activations, 'Max Similarity', 'Mean Similarity', 'expert_feature_similarity_max_mean_lollipop.png')
-    draw_lollipop_single(x, inter_max_ratio_arr, in_max_ratio_arr, activations, 'Ratio', 'Ratio', 'expert_feature_similarity_max_mean_ratio_lollipop.png')
-
     width = 0.4
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(8, 8))
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 8))
     
     ax1.bar(x - width/2, in_max_ratio_list, width, label='in-expert', color='#264653', hatch='///')
     ax1.bar(x + width/2, inter_max_ratio_list, width, label='inter-expert', color='#2a9d8f', hatch='\\\\')

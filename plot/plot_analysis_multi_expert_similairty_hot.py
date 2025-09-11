@@ -28,7 +28,6 @@ plt.rcParams.update({
 
 fig, ax = plt.subplots(figsize=(12, 8))
 
-# 创建自定义颜色映射，从264653（深绿）到2a9d8f（浅绿）
 colors = ['#264653', '#2a9d8f']
 n_bins = 100
 custom_cmap = LinearSegmentedColormap.from_list('custom', colors, N=n_bins)
@@ -38,7 +37,6 @@ im = ax.imshow(heatmap_data, cmap=custom_cmap)
 for i in range(len(experts)):
     for j in range(len(k_values)):
         value = heatmap_data[i, j]
-        # 在深绿色背景上使用白色文字以确保可读性
         ax.text(j, i, f'{value:.4f}', ha='center', va='center', 
                 color='white', fontsize=18, weight='bold')
 

@@ -27,7 +27,7 @@ plt.rcParams.update({
 })
 
 # 3. 创建图表（统一尺寸）
-plt.figure(figsize=(8, 8))
+plt.figure(figsize=(12, 8))
 
 # 4. 绘制每一条 expert 曲线
 for i, (expert_count, frac_recovered_values) in enumerate(expert_data.items()):

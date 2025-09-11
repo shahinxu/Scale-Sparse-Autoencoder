@@ -11,8 +11,7 @@ expert_data = {
     16: [4100, 3900, 3700, 3500, 3637.6928, 3300, 3100],
 }
 
-# 定义不同的marker形状和颜色
-markers = ['o', 's', '^', 'D', 'v']  # 圆形, 方形, 上三角, 菱形, 下三角
+markers = ['o', 's', '^', 'D', 'v']
 colors = ['#264653', '#2a9d8f', '#e9c46a', '#f4a261', '#e76f51']
 
 plt.rcParams.update({
@@ -23,7 +22,7 @@ plt.rcParams.update({
     'legend.fontsize': 20,
 })
 
-plt.figure(figsize=(8, 8))
+plt.figure(figsize=(12, 8))
 
 for i, (expert_count, mse_values) in enumerate(expert_data.items()):
     plt.plot(
@@ -33,7 +32,7 @@ for i, (expert_count, mse_values) in enumerate(expert_data.items()):
         linestyle='-',
         linewidth=3,
         color=colors[i],
-        markersize=12,  # 调整marker大小
+        markersize=12,
         label=f'{expert_count} experts'
     )
 

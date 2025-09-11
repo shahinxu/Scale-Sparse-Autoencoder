@@ -62,7 +62,7 @@ plt.rcParams.update({
 x = np.arange(len(experts))
 width = 0.4
 
-fig, ax1 = plt.subplots(figsize=(8, 8))
+fig, ax1 = plt.subplots(figsize=(12, 8))
 
 # 绘制MSE柱状图（左轴，从下往上）- Plain用斜线纹理，Scale用实心
 rects1 = ax1.bar(x - width/2, no_scale_mse, width, label='Plain', color='#264653', hatch='///')
@@ -88,5 +88,5 @@ ax2.set_ylim(1.0, 0.88)
 
 ax1.legend(loc='lower left', frameon=True)
 
-plt.savefig('ablation_scale_vary_expert_mse.png', dpi=300, bbox_inches='tight')
-print('Saved ablation_scale_vary_expert_mse.png')
+plt.savefig('ablation_scale_vary_expert.png', dpi=300, bbox_inches='tight')
+print('Saved ablation_scale_vary_expert.png')
