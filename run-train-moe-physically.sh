@@ -4,7 +4,7 @@ set -euo pipefail
 cd "$(dirname "$0")"
 
 # Loop through different es values
-for es in 1 2 4 8 16; do
+for es in 2 4 8 16; do
     echo "========================================="
     echo "Training with es=$es"
     echo "========================================="
