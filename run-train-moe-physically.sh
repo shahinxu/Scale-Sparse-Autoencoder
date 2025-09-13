@@ -3,20 +3,21 @@ set -euo pipefail
 
 cd "$(dirname "$0")"
 
-# Loop through different es values
-for es in 2 4 8 16; do
+# Loop through different ks values
+for ks in 2 4 8 16 32 64 128; do
     echo "========================================="
-    echo "Training with es=$es"
+    echo "Training with ks=$ks"
     echo "========================================="
     
-    python -u train-moe_physically_scale.py \
-      --gpu 1 \
-      --ks 64 \
-      --num_experts 64 \
-      --es $es \
-      --heavisides False
-      
-    echo "Completed training with es=$es"
+    python -u train-gated.py \
+      --gpu 4 \
+      --l1_penalties 0.01
+      # --ks $ks \
+      # --num_experts 32 \
+      # --es 4 \
+      # --heavisides False
+
+    echo "Completed training with ks=$ks"
     echo ""
 done
 

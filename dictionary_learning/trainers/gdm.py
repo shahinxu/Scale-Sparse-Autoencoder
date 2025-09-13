@@ -13,7 +13,7 @@ class ConstrainedAdam(t.optim.Adam):
     A variant of Adam where some of the parameters are constrained to have unit norm.
     """
     def __init__(self, params, constrained_params, lr):
-        super().__init__(params, lr=lr, betas=(0, 0.999))
+        super().__init__(params, lr=lr, betas=(0.0, 0.999))
         self.constrained_params = list(constrained_params)
     
     def step(self, closure=None):
