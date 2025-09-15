@@ -245,13 +245,15 @@ def evaluate(
 
     # Decoder similarity calculation
     if hasattr(dictionary, "decoder"):
-        decoder_matrix = dictionary.decoder
+        if isinstance(dictionary.decoder, t.nn.Linear):
+            decoder_matrix = dictionary.decoder.weight
+        else:
+            decoder_matrix = dictionary.decoder
     elif hasattr(dictionary, "expert_modules"):
         decoder_weights = [expert.decoder for expert in dictionary.expert_modules]
         decoder_matrix = t.cat(decoder_weights, dim=0)
     else:
         raise AttributeError("Dictionary must have 'decoders' or 'decoder' attribute.")
-
     if using_decompose:
         decoder_matrix, _, _ = dictionary.decompose_low_high(decoder_matrix, dictionary.beta)
     decoder_normed = decoder_matrix / decoder_matrix.norm(dim=1, keepdim=True)

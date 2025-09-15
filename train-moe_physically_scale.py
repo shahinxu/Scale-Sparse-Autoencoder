@@ -26,8 +26,8 @@ model = LanguageModel(lm, dispatch=True, device_map=device)
 submodule = model.transformer.h[layer]
 data = hf_dataset_to_generator(hf)
 buffer = ActivationBuffer(data, model, submodule, d_submodule=activation_dim, n_ctxs=n_ctxs, device=device)
-test_data = hf_dataset_to_generator(hf_test, data='wikitext-103-raw-v1')
-test_buffer = ActivationBuffer(test_data, model, submodule, d_submodule=activation_dim, n_ctxs=n_ctxs, device=device)
+test_data = hf_dataset_to_generator(hf_test, split="test")
+test_buffer = ActivationBuffer(test_data, model, submodule, d_submodule=activation_dim, refresh_batch_size=8, out_batch_size=8, n_ctxs=n_ctxs, device=device)
 
 base_trainer_config = {
     'trainer' : MoETrainer,
@@ -79,7 +79,7 @@ wandb.finish()
 #             t.load(f"dictionaries/MultiExpert_Scale_{trainer_config['k']}_{trainer_config['experts']}_{trainer_config['e']}/8.pt")
 #         )
 #         ae.to(device)
-#         metrics = evaluate(ae, buffer, device=device)
+#         metrics = evaluate(ae, test_buffer, device=device, batch_size=1)
 #         safe_config = {k: (str(v) if callable(v) or isinstance(v, type) else v) for k, v in trainer_config.items()}
 #         record = {"trainer_config": safe_config, "metrics": metrics}
 #         f.write(json.dumps(record, ensure_ascii=False, default=str) + "\n")

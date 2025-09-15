@@ -10,6 +10,7 @@ import wandb
 import argparse
 from config import lm, activation_dim, layer, hf, steps, n_ctxs
 import os
+import json
 os.environ["WANDB_MODE"] = "disabled"
 parser = argparse.ArgumentParser()
 parser.add_argument("--gpu", required=True)
@@ -46,10 +47,24 @@ wandb.init(entity="amudide", project="Gated-BigLR", config={f'{trainer_config["w
 trainSAE(buffer, trainer_configs=trainer_configs, save_dir='dictionaries', log_steps=1, steps=steps)
 
 print("Training finished. Evaluating SAE...", flush=True)
-for i, trainer_config in enumerate(trainer_configs):
-    ae = GatedAutoEncoder.from_pretrained(f'dictionaries/{cfg_filename(trainer_config)}/ae.pt', device=device)
-    metrics = evaluate(ae, buffer, device=device)
-    log = {}
-    log.update({f'{trainer_config["wandb_name"]}-{i}/{k}' : v for k, v in metrics.items()})
-    wandb.log(log, step=steps+1)
+
+with open("metrics_log.jsonl", "a") as f:
+    for i, trainer_config in enumerate(trainer_configs):
+        ae = GatedAutoEncoder.from_pretrained(f'dictionaries/{cfg_filename(trainer_config)}/ae.pt', device=device)
+        metrics = evaluate(ae, buffer, device=device)
+        safe_config = {k: (str(v) if callable(v) or isinstance(v, type) else v) for k, v in trainer_config.items()}
+        record = {"trainer_config": safe_config, "metrics": metrics}
+        f.write(json.dumps(record, ensure_ascii=False, default=str) + "\n")
+        print(record)
 wandb.finish()
+
+# with open("metrics_log.jsonl", "a") as f:
+#     for i, trainer_config in enumerate(trainer_configs):
+#         ae = GatedAutoEncoder(activation_dim=768, dict_size=4*768, device=device)
+#         ae.load_state_dict(t.load("/home/xuzhen/switch_sae/dictionaries/gated_32_8/8.pt"))
+#         ae.to(device)
+#         metrics = evaluate(ae, buffer, device=device)
+#         safe_config = {k: (str(v) if callable(v) or isinstance(v, type) else v) for k, v in trainer_config.items()}
+#         record = {"trainer_config": safe_config, "metrics": metrics}
+#         f.write(json.dumps(record, ensure_ascii=False, default=str) + "\n")
+#         print(record)

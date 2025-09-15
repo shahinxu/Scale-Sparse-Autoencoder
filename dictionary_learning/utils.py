@@ -16,7 +16,7 @@ def hf_dataset_to_generator(dataset_name, split='train', streaming=True, max_len
     
     def gen():
         for x in iter(dataset):
-            input_ids = tokenizer.encode(x['text'], truncation=True, max_length=max_length)
+            input_ids = tokenizer.encode(x['question'], truncation=True, max_length=max_length)
             text = tokenizer.decode(input_ids, skip_special_tokens=True)
             yield text
     
