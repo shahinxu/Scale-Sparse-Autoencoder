@@ -13,7 +13,7 @@ import json
 os.environ["WANDB_MODE"] = "disabled"
 parser = argparse.ArgumentParser()
 parser.add_argument("--gpu", required=True)
-parser.add_argument('--dict_ratio', type=int, default=32 // 8)
+parser.add_argument('--dict_ratio', type=int, default=32 // 32)
 parser.add_argument("--ks", nargs="+", type=int, required=True)
 args = parser.parse_args()
 
@@ -42,28 +42,28 @@ base_trainer_config = {
 
 trainer_configs = [(base_trainer_config | {'k': k}) for k in args.ks]
 
-# wandb.init(entity="amudide", project="TopK (Frequent Log)", config={f'{trainer_config["wandb_name"]}-{i}' : trainer_config for i, trainer_config in enumerate(trainer_configs)})
+wandb.init(entity="amudide", project="TopK (Frequent Log)", config={f'{trainer_config["wandb_name"]}-{i}' : trainer_config for i, trainer_config in enumerate(trainer_configs)})
 
-# trainSAE(buffer, trainer_configs=trainer_configs, save_dir='dictionaries', log_steps=1, steps=steps)
+trainSAE(buffer, trainer_configs=trainer_configs, save_dir='dictionaries', log_steps=1, steps=steps)
 
-# print("Training finished. Evaluating SAE...", flush=True)
+print("Training finished. Evaluating SAE...", flush=True)
+with open("metrics_log.jsonl", "a") as f:
+    for i, trainer_config in enumerate(trainer_configs):
+        ae = AutoEncoderTopK.from_pretrained(f'dictionaries/{cfg_filename(trainer_config)}/ae.pt', k = trainer_config['k'], device=device)
+        metrics = evaluate(ae, buffer, device=device)
+        safe_config = {k: (str(v) if callable(v) or isinstance(v, type) else v) for k, v in trainer_config.items()}
+        record = {"trainer_config": safe_config, "metrics": metrics}
+        f.write(json.dumps(record, ensure_ascii=False, default=str) + "\n")
+        print(record)
+wandb.finish()
+
 # with open("metrics_log.jsonl", "a") as f:
 #     for i, trainer_config in enumerate(trainer_configs):
-#         ae = AutoEncoderTopK.from_pretrained(f'dictionaries/{cfg_filename(trainer_config)}/ae.pt', k = trainer_config['k'], device=device)
+#         ae = AutoEncoderTopK(activation_dim=768, dict_size=768, k=trainer_config['k'])
+#         ae.load_state_dict(t.load(f"/home/xuzhen/switch_sae/dictionaries/topk_{trainer_config['k']}_32/8.pt"))
+#         ae.to(device)
 #         metrics = evaluate(ae, buffer, device=device)
 #         safe_config = {k: (str(v) if callable(v) or isinstance(v, type) else v) for k, v in trainer_config.items()}
 #         record = {"trainer_config": safe_config, "metrics": metrics}
 #         f.write(json.dumps(record, ensure_ascii=False, default=str) + "\n")
 #         print(record)
-# wandb.finish()
-
-with open("metrics_log.jsonl", "a") as f:
-    for i, trainer_config in enumerate(trainer_configs):
-        ae = AutoEncoderTopK(activation_dim=768, dict_size=4*768, k=trainer_config['k'])
-        ae.load_state_dict(t.load(f"/home/xuzhen/switch_sae/dictionaries/topk_{trainer_config['k']}_8/8.pt"))
-        ae.to(device)
-        metrics = evaluate(ae, test_buffer, device=device)
-        safe_config = {k: (str(v) if callable(v) or isinstance(v, type) else v) for k, v in trainer_config.items()}
-        record = {"trainer_config": safe_config, "metrics": metrics}
-        f.write(json.dumps(record, ensure_ascii=False, default=str) + "\n")
-        print(record)

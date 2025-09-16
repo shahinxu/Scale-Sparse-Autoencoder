@@ -26,8 +26,8 @@ model = LanguageModel(lm, dispatch=True, device_map=device)
 submodule = model.transformer.h[layer]
 data = hf_dataset_to_generator(hf)
 buffer = ActivationBuffer(data, model, submodule, d_submodule=activation_dim, n_ctxs=n_ctxs, device=device)
-test_data = hf_dataset_to_generator(hf_test, split="test")
-test_buffer = ActivationBuffer(test_data, model, submodule, d_submodule=activation_dim, refresh_batch_size=8, out_batch_size=8, n_ctxs=n_ctxs, device=device)
+test_data = hf_dataset_to_generator(hf_test, data='wikitext-103-raw-v1')
+test_buffer = ActivationBuffer(test_data, model, submodule, d_submodule=activation_dim, n_ctxs=n_ctxs, device=device)
 
 base_trainer_config = {
     'trainer' : MoETrainer,

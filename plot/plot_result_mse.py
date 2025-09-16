@@ -15,10 +15,11 @@ plt.rcParams.update({
 k_values = [2, 4, 8, 16, 32, 64, 128]
 
 data = {
-    'Scale SAE': [6800.00, 3900.00, 3500.00, 3380.00, 3333.21, 3300.00, 3280.00],
-    'Switch SAE': [12500.00, 5800.00, 4200.00, 3900.00, 3750.00, 3600.00, 3520.00],
-    'TopK SAE': [13800.00, 6200.00, 4650.00, 4200.00, 4000.00, 3850.00, 3750.00],
-    'ReLU SAE': [15200.00, 7100.00, 5400.00, 4800.00, 4500.00, 4300.00, 4150.00]
+    'Scale SAE, expert=64': [4228.131836, 3385.18334, 2668.222412, 2074.655762, 1446.149658, 1118.567017, 882.0480957],
+    'Scale SAE, expert=32': [4105.019531, 3318.044678, 2556.581299, 1859.144287, 1344.437134, 1056.427124, 846.8684082],
+    'Scale SAE, expert=16': [4019.097168, 3142.984863, 2359.544678, 1706.990112, 1303.804199, 1044.636597, 825.8157349],
+    'TopK': [5768.549072, 5001.839355, 4348.244629, 3199.568848, 2406.709717, 1866.037354, 1151.092896],
+    'switch SAE': [4634.476563, 4226.252441, 3455.060059, 2871.674316, 2290.039063, 1800.673828, 1255.720215],
 }
 
 plt.figure(figsize=(12, 8))
@@ -50,7 +51,7 @@ ax.yaxis.set_major_locator(mticker.LogLocator(base=10.0))
 ax.yaxis.set_major_formatter(mticker.LogFormatterMathtext(base=10.0))
 ax.yaxis.set_minor_locator(mticker.NullLocator())
 
-plt.legend(loc='upper right', frameon=True)
+plt.legend(loc='lower left', frameon=True)
 
 plt.grid(True, alpha=0.3, linestyle='--', linewidth=0.8)
 

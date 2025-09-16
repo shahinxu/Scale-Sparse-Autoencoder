@@ -15,7 +15,7 @@ os.environ["WANDB_MODE"] = "disabled"
 parser = argparse.ArgumentParser()
 parser.add_argument("--gpu", required=True)
 parser.add_argument('--lr', type=float, default=1e-3) ## 3e-4, 5e-5
-parser.add_argument('--dict_ratio', type=int, default=32 // 8)
+parser.add_argument('--dict_ratio', type=int, default=32 // 32)
 parser.add_argument("--l1_penalties", nargs="+", type=float, required=True)
 args = parser.parse_args()
 

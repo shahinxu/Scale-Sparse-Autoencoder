@@ -271,7 +271,7 @@ class MoETrainer(SAETrainer):
 
         lb_loss = self.experts * t.dot(flb, P)
 
-        lb_loss_weight = 3
+        lb_loss_weight = 0.01
         
         l2_loss = e.pow(2).sum(dim=-1).mean()
         auxk_loss = auxk_loss.sum(dim=-1).mean()
