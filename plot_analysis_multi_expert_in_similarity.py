@@ -67,17 +67,18 @@ def compute_inter_expert_metrics(dictionary, device="cpu"):
 def main():
     device = f'cuda:{GPU}'
     activations = [1, 2, 4, 8, 16]
-    in_mean_list = []
-    in_max_mean_list = []
-    in_max_ratio_list = []
-    inter_mean_list = []
-    inter_max_mean_list = []
-    inter_max_ratio_list = []
+    # 第一组：MultiExpert_16_64_{activation}
+    in_max_ratio_list_16 = []
+    inter_max_ratio_list_16 = []
+    # 第二组：MultiExpert_32_64_{activation}
+    in_max_ratio_list_32 = []
+    inter_max_ratio_list_32 = []
 
     for activation in activations:
-        MODEL = f"MultiExpert_32_64_{activation}"
-        MODEL_PATH = f"/home/xuzhen/switch_sae/dictionaries/{MODEL}/8.pt"
-        ae = MultiExpertAutoEncoder(
+        # L0=16
+        MODEL_16 = f"MultiExpert_16_64_{activation}"
+        MODEL_PATH_16 = f"/home/xuzhen/switch_sae/dictionaries/{MODEL_16}/8.pt"
+        ae_16 = MultiExpertAutoEncoder(
             activation_dim=768,
             dict_size=32*768,
             k=32,
@@ -85,25 +86,40 @@ def main():
             e=activation,
             heaviside=False
         )
-        ae.load_state_dict(t.load(MODEL_PATH))
-        ae.to(device)
-        ae.eval()
-        in_expert_mean, in_expert_max_mean, in_expert_max_mean_ratio = compute_in_expert_metrics(ae, device=device)
-        inter_expert_mean, inter_expert_max_mean, inter_expert_max_mean_ratio = compute_inter_expert_metrics(ae, device=device)
-        in_mean_list.append(in_expert_mean)
-        in_max_mean_list.append(in_expert_max_mean)
-        in_max_ratio_list.append(in_expert_max_mean_ratio)
-        inter_mean_list.append(inter_expert_mean)
-        inter_max_mean_list.append(inter_expert_max_mean)
-        inter_max_ratio_list.append(inter_expert_max_mean_ratio)
+        ae_16.load_state_dict(t.load(MODEL_PATH_16))
+        ae_16.to(device)
+        ae_16.eval()
+        _, _, in_max_ratio_16 = compute_in_expert_metrics(ae_16, device=device)
+        _, _, inter_max_ratio_16 = compute_inter_expert_metrics(ae_16, device=device)
+        in_max_ratio_list_16.append(in_max_ratio_16)
+        inter_max_ratio_list_16.append(inter_max_ratio_16)
+
+        # L0=32
+        MODEL_32 = f"MultiExpert_32_64_{activation}"
+        MODEL_PATH_32 = f"/home/xuzhen/switch_sae/dictionaries/{MODEL_32}/8.pt"
+        ae_32 = MultiExpertAutoEncoder(
+            activation_dim=768,
+            dict_size=32*768,
+            k=32,
+            experts=64,
+            e=activation,
+            heaviside=False
+        )
+        ae_32.load_state_dict(t.load(MODEL_PATH_32))
+        ae_32.to(device)
+        ae_32.eval()
+        _, _, in_max_ratio_32 = compute_in_expert_metrics(ae_32, device=device)
+        _, _, inter_max_ratio_32 = compute_inter_expert_metrics(ae_32, device=device)
+        in_max_ratio_list_32.append(in_max_ratio_32)
+        inter_max_ratio_list_32.append(inter_max_ratio_32)
 
     x = np.arange(len(activations))
-
     width = 0.4
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 8))
-    
-    ax1.bar(x - width/2, in_max_ratio_list, width, label='in-expert', color='#264653', hatch='///')
-    ax1.bar(x + width/2, inter_max_ratio_list, width, label='inter-expert', color='#2a9d8f', hatch='\\\\')
+
+    # 第一张图：MultiExpert_16_64_{activation}
+    ax1.bar(x - width/2, in_max_ratio_list_16, width, label='in-expert', color='#264653', hatch='///')
+    ax1.bar(x + width/2, inter_max_ratio_list_16, width, label='inter-expert', color='#2a9d8f', hatch='\\\\')
     ax1.set_xticks(x)
     ax1.set_xticklabels(activations)
     ax1.set_xlabel('# Experts')
@@ -112,9 +128,10 @@ def main():
     ax1.set_title('L0=16')
     ax1.legend()
     ax1.grid(True, alpha=0.3, linestyle='--', linewidth=0.8)
-    
-    ax2.bar(x - width/2, in_max_ratio_list, width, color='#264653', hatch='///')
-    ax2.bar(x + width/2, inter_max_ratio_list, width, color='#2a9d8f', hatch='\\\\')
+
+    # 第二张图：MultiExpert_32_64_{activation}
+    ax2.bar(x - width/2, in_max_ratio_list_32, width, color='#264653', hatch='///')
+    ax2.bar(x + width/2, inter_max_ratio_list_32, width, color='#2a9d8f', hatch='\\\\')
     ax2.set_xticks(x)
     ax2.set_xticklabels(activations)
     ax2.set_xlabel('# Experts')
@@ -122,7 +139,7 @@ def main():
     ax2.set_title('L0=32')
     ax2.set_yticklabels([])
     ax2.grid(True, alpha=0.3, linestyle='--', linewidth=0.8)
-    
+
     plt.tight_layout()
     plt.savefig('analysis_multi_expert_ratio_bar.png', dpi=300, bbox_inches='tight')
     print("Saved analysis_multi_expert_ratio_bar.png")

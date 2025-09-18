@@ -17,15 +17,15 @@ rows_l0_32 = [
 
 # Simulated data for L0=16: slightly higher values as L0=16 typically has higher similarity
 rows_l0_16 = [
-    (1, False, 0.0165),
-    (1, True, 0.0108),
-    (2, False, 0.0029),
-    (2, True, 0.0062),
-    (4, False, 0.0032),
-    (4, True, 0.0029),
-    (8, False, 0.0019),
-    (8, True, 0.0009),
-    (16, False, 0.0017),
+    (1, False, 0.034057617),
+    (1, True, 0.011515299),
+    (2, False, 0.029174805),
+    (2, True, 0.011230469),
+    (4, False, 0.006795247),
+    (4, True, 0.003295898),
+    (8, False, 0.002970378),
+    (8, True, 0.001586914),
+    (16, False, 0.001505534),
     (16, True, 0.0008),
 ]
 
@@ -67,7 +67,7 @@ ax1.set_xticks(x)
 ax1.set_xticklabels(experts_16)
 ax1.set_xlabel('# Experts')
 ax1.set_ylabel('Ratio')
-ax1.set_ylim(0, 0.018)
+ax1.set_ylim(0, 0.035)
 ax1.set_title('L0=16')
 ax1.legend()
 ax1.grid(True, alpha=0.3, linestyle='--', linewidth=0.8)
@@ -78,7 +78,7 @@ ax2.bar(x + width/2, plain_list_32, width, color='#2a9d8f', hatch='\\\\')
 ax2.set_xticks(x)
 ax2.set_xticklabels(experts_32)
 ax2.set_xlabel('# Experts')
-ax2.set_ylim(0, 0.018)
+ax2.set_ylim(0, 0.035)
 ax2.set_title('L0=32')
 ax2.set_yticklabels([])
 ax2.grid(True, alpha=0.3, linestyle='--', linewidth=0.8)
