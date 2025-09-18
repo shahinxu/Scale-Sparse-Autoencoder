@@ -1,6 +1,6 @@
 import matplotlib.pyplot as plt
 import numpy as np
-from matplotlib.colors import TwoSlopeNorm, LinearSegmentedColormap
+from matplotlib.colors import TwoSlopeNorm, LinearSegmentedColormap, ListedColormap
 import os
 
 data_dict = {
@@ -30,17 +30,27 @@ plt.rcParams.update({
 fig, ax = plt.subplots(figsize=(12, 8))
 
 # 可通过环境变量或直接改下面的默认值来自定义颜色
-LEFT_COLOR = os.environ.get('LEFT_COLOR', '#e9c46a')
-RIGHT_COLOR = os.environ.get('RIGHT_COLOR', '#2a9d8f')
-MID_COLOR = '#ffffff'
+# 现在：正侧从 POS_START -> POS_END；负侧从 NEG_START -> NEG_END
+NEG_START = os.environ.get('NEG_START', '#e9c46a')  # 负侧起色（靠近零）
+NEG_END = os.environ.get('NEG_END', '#e76f51')      # 负侧终色（更负）
+POS_START = os.environ.get('POS_START', '#2a9d8f')  # 正侧起色（较小正值）
+POS_END = os.environ.get('POS_END', '#264653')      # 正侧终色（较大正值）
+MID_COLOR = '#ffffff'  # 中心白色（用于 0）
 
-custom_cmap = LinearSegmentedColormap.from_list('custom_div',
-                                                [LEFT_COLOR, MID_COLOR, RIGHT_COLOR],
-                                                N=256)
+# Build a colormap composed of a negative gradient (NEG_END -> NEG_START)
+# followed by a positive gradient (POS_START -> POS_END). We reserve the
+# exact zero value by masking it and setting it to white via set_bad.
+half = 128
+pos_base = LinearSegmentedColormap.from_list('pos_base', [POS_START, POS_END], N=half)
+pos_samples = pos_base(np.linspace(0, 1, half))
+neg_base = LinearSegmentedColormap.from_list('neg_base', [NEG_END, NEG_START], N=half)
+neg_samples = neg_base(np.linspace(0, 1, half))
+listed_colors = np.vstack((neg_samples, pos_samples))
+custom_cmap = ListedColormap(listed_colors)
 
 # Non-linear mapping parameters (control how strongly values are pushed toward ends)
 POSITIVE_GAMMA = float(os.environ.get('POSITIVE_GAMMA', '0.6'))  # <1 pushes moderate positives toward the right color
-NEGATIVE_GAMMA = float(os.environ.get('NEGATIVE_GAMMA', '1.0'))  # <1 would push moderate negatives toward the left color
+NEGATIVE_GAMMA = float(os.environ.get('NEGATIVE_GAMMA', '0.6'))  # <1 would push moderate negatives toward the left color
 
 vmin = float(np.nanmin(heatmap_data))
 vmax = float(np.nanmax(heatmap_data))
@@ -75,32 +85,14 @@ im.cmap.set_bad(color='white')
 for i in range(len(experts)):
     for j in range(len(k_values)):
         value = heatmap_data[i, j]
-        if value == 0:
-            txt_color = 'black'
-        else:
-            # sample using the mapped scalar we computed
-            mapped_scalar = mapped[i, j]
-            if np.isnan(mapped_scalar):
-                rgba = (1.0, 1.0, 1.0, 1.0)
-            else:
-                rgba = custom_cmap(mapped_scalar)
-            luminance = 0.2126 * rgba[0] + 0.7152 * rgba[1] + 0.0722 * rgba[2]
-            txt_color = 'black' if luminance > 0.55 else 'white'
-        ax.text(j, i, f'{value:.2f}', ha='center', va='center', color=txt_color, fontsize=18, weight='bold')
+        # Force annotations to white for consistent readability
+        ax.text(j, i, f'{value:.2f}', ha='center', va='center', color='white', fontsize=18, weight='bold')
 
-def _choose_ticks(labels, max_ticks: int = 4):
-    n = len(labels)
-    num = min(max_ticks, n)
-    idxs = np.linspace(0, n - 1, num, dtype=int)
-    idxs = np.unique(idxs)
-    return idxs, [labels[i] for i in idxs]
 
-xt_idxs, xt_lbls = _choose_ticks(k_values, max_ticks=4)
-yt_idxs, yt_lbls = _choose_ticks(experts, max_ticks=3)
-ax.set_xticks(xt_idxs)
-ax.set_yticks(yt_idxs)
-ax.set_xticklabels(xt_lbls)
-ax.set_yticklabels(yt_lbls)
+ax.set_xticks(np.arange(len(k_values)))
+ax.set_xticklabels(k_values)
+ax.set_yticks(np.arange(len(experts)))
+ax.set_yticklabels(experts)
 
 ax.set_xlabel('Sparsity (L0)')
 ax.set_ylabel('# Experts')
