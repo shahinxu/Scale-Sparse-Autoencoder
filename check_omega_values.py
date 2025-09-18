@@ -2,9 +2,10 @@ import torch as t
 import numpy as np
 import matplotlib.pyplot as plt
 import os
+import json
 from dictionary_learning.trainers.moe_physically_scale import MultiExpertScaleAutoEncoder
 
-def check_omega_values(model_path, activation_dim=768, dict_size=32*768, k=32, experts=64, e=1, heaviside=False):
+def check_omega_values(model_path, activation_dim=768, dict_size=32*768, k=32, experts=64, e=1, heaviside=False, save_fig=False, output_dir=None, map_location='cpu'):
     """
     检查已训练模型的omega参数值
     
@@ -20,7 +21,8 @@ def check_omega_values(model_path, activation_dim=768, dict_size=32*768, k=32, e
     
     # 加载模型
     print(f"Loading model from: {model_path}")
-    device = 'cuda' if t.cuda.is_available() else 'cpu'
+    # For batch runs we default to loading on CPU to avoid GPU memory pressure.
+    device = 'cpu' if map_location == 'cpu' else ('cuda' if t.cuda.is_available() else 'cpu')
     
     try:
         # 创建模型实例
@@ -34,7 +36,11 @@ def check_omega_values(model_path, activation_dim=768, dict_size=32*768, k=32, e
         )
         
         # 加载权重
-        state_dict = t.load(model_path, map_location=device)
+        # load to CPU (map_location) by default, then move model to requested device
+        state_dict = t.load(model_path, map_location=map_location)
+        # allow wrappers where checkpoint contains {'state_dict': ...}
+        if isinstance(state_dict, dict) and 'state_dict' in state_dict and isinstance(state_dict['state_dict'], dict):
+            state_dict = state_dict['state_dict']
         model.load_state_dict(state_dict)
         model.to(device)
         
@@ -71,40 +77,42 @@ def check_omega_values(model_path, activation_dim=768, dict_size=32*768, k=32, e
         for i, beta in enumerate(beta_values):
             print(f"Expert {i:2d}: {beta:8.6f}")
         
-        # 可视化omega和beta值
-        plt.figure(figsize=(15, 5))
-        
-        # Omega值分布
-        plt.subplot(1, 3, 1)
-        expert_ids = np.arange(len(omega_values))
-        plt.bar(expert_ids, omega_values, alpha=0.7, color='blue')
-        plt.xlabel('Expert ID')
-        plt.ylabel('Omega Value')
-        plt.title('Omega Values per Expert')
-        plt.grid(True, alpha=0.3)
-        
-        # Beta值分布
-        plt.subplot(1, 3, 2)
-        plt.bar(expert_ids, beta_values, alpha=0.7, color='red')
-        plt.xlabel('Expert ID')
-        plt.ylabel('Beta Value')
-        plt.title('Beta Values per Expert')
-        plt.grid(True, alpha=0.3)
-        
-        # Omega和Beta的散点图
-        plt.subplot(1, 3, 3)
-        plt.scatter(omega_values, beta_values, alpha=0.7)
-        plt.xlabel('Omega Value')
-        plt.ylabel('Beta Value')
-        plt.title('Omega vs Beta Values')
-        plt.grid(True, alpha=0.3)
-        
-        plt.tight_layout()
-        
-        # 保存图像
-        output_path = "omega_beta_analysis.png"
-        plt.savefig(output_path, dpi=300, bbox_inches='tight')
-        print(f"\nVisualization saved to: {os.path.abspath(output_path)}")
+        # 可视化omega和beta值（仅在save_fig=True时生成）
+        if save_fig:
+            plt.figure(figsize=(15, 5))
+            # Omega值分布
+            plt.subplot(1, 3, 1)
+            expert_ids = np.arange(len(omega_values))
+            plt.bar(expert_ids, omega_values, alpha=0.7, color='blue')
+            plt.xlabel('Expert ID')
+            plt.ylabel('Omega Value')
+            plt.title('Omega Values per Expert')
+            plt.grid(True, alpha=0.3)
+            
+            # Beta值分布
+            plt.subplot(1, 3, 2)
+            plt.bar(expert_ids, beta_values, alpha=0.7, color='red')
+            plt.xlabel('Expert ID')
+            plt.ylabel('Beta Value')
+            plt.title('Beta Values per Expert')
+            plt.grid(True, alpha=0.3)
+            
+            # Omega和Beta的散点图
+            plt.subplot(1, 3, 3)
+            plt.scatter(omega_values, beta_values, alpha=0.7)
+            plt.xlabel('Omega Value')
+            plt.ylabel('Beta Value')
+            plt.title('Omega vs Beta Values')
+            plt.grid(True, alpha=0.3)
+            
+            plt.tight_layout()
+            # 保存图像
+            if output_dir is None:
+                output_dir = '.'
+            os.makedirs(output_dir, exist_ok=True)
+            output_path = os.path.join(output_dir, f"omega_beta_k{k}_e{e}.png")
+            plt.savefig(output_path, dpi=300, bbox_inches='tight')
+            print(f"\nVisualization saved to: {os.path.abspath(output_path)}")
         
         return omega_values, beta_values
         
@@ -113,44 +121,86 @@ def check_omega_values(model_path, activation_dim=768, dict_size=32*768, k=32, e
         return None, None
 
 def main():
-    # 配置参数
+    # Batch configuration: grid of k and e to test
     LAYER = 8
-    E = 16
-    k = 32
     experts = 64
-    
-    # 模型路径
-    model_path = f"dictionaries/MultiExpert_Scale_{k}_{experts}_{E}/{LAYER}.pt"
-    
-    if not os.path.exists(model_path):
-        print(f"Model file not found: {model_path}")
-        print("Please check the path and make sure the model exists.")
-        
-        print("\nLooking for alternative model files...")
-        dictionaries_dir = "dictionaries"
-        if os.path.exists(dictionaries_dir):
-            for item in os.listdir(dictionaries_dir):
-                if "MultiExpert_Scale" in item:
-                    full_path = os.path.join(dictionaries_dir, item)
-                    if os.path.isdir(full_path):
-                        model_file = os.path.join(full_path, f"{LAYER}.pt")
-                        if os.path.exists(model_file):
-                            print(f"Found: {model_file}")
-        return
-    
-    print(f"Checking omega values for model: {model_path}")
-    omega_values, beta_values = check_omega_values(
-        model_path=model_path,
-        activation_dim=768,
-        dict_size=32 * 768,  # 根据实际情况调整
-        k=k,
-        experts=experts,
-        e=E,
-        heaviside=False
-    )
-    
-    if omega_values is not None:
-        print("\nAnalysis completed successfully!")
+    # user-requested grid (you can adjust these lists)
+    k_list = [128, 64, 32, 16, 8, 4]
+    e_list = [1, 2, 4, 8, 16]
+
+    results = {}
+    import csv
+
+    for k in k_list:
+        results[k] = {}
+        for e in e_list:
+            # build candidate paths: prefer Scale variant, then plain
+            path_scale = f"dictionaries/MultiExpert_Scale_{k}_{experts}_{e}/{LAYER}.pt"
+            path_plain = f"dictionaries/MultiExpert_{k}_{experts}_{e}/{LAYER}.pt"
+            model_path = None
+            if os.path.exists(path_scale):
+                model_path = path_scale
+            elif os.path.exists(path_plain):
+                model_path = path_plain
+
+            if model_path is None:
+                print(f"Skipping k={k}, e={e}: no checkpoint found (tried scale/plain)")
+                results[k][e] = None
+                continue
+
+            print(f"Processing k={k}, e={e} -> {model_path}")
+            omega_vals, beta_vals = check_omega_values(
+                model_path=model_path,
+                activation_dim=768,
+                dict_size=32 * 768,
+                k=k,
+                experts=experts,
+                e=e,
+                heaviside=False,
+                save_fig=False,
+                output_dir='omega_outputs',
+                map_location='cpu'
+            )
+
+            if omega_vals is None:
+                results[k][e] = None
+                continue
+
+            # summarize
+            res = {
+                'omega_mean': float(np.mean(omega_vals)),
+                'omega_std': float(np.std(omega_vals)),
+                'omega_min': float(np.min(omega_vals)),
+                'omega_max': float(np.max(omega_vals)),
+                'beta_mean': float(np.mean(beta_vals)),
+                'beta_std': float(np.std(beta_vals)),
+                'beta_min': float(np.min(beta_vals)),
+                'beta_max': float(np.max(beta_vals)),
+                'n_experts': int(len(omega_vals))
+            }
+            results[k][e] = res
+
+    # save JSON and CSV
+    out_json = 'omega_grid_results.json'
+    with open(out_json, 'w', encoding='utf-8') as f:
+        json.dump(results, f, indent=2, ensure_ascii=False)
+    print(f"Wrote JSON results to {out_json}")
+
+    # CSV: rows k, cols e, fill with omega_mean (or empty)
+    out_csv = 'omega_grid_results.csv'
+    with open(out_csv, 'w', newline='', encoding='utf-8') as f:
+        writer = csv.writer(f)
+        header = ['k\\e'] + [str(e) for e in e_list]
+        writer.writerow(header)
+        for k in k_list:
+            row = [str(k)]
+            for e in e_list:
+                cell = ''
+                if results.get(k) and results[k].get(e):
+                    cell = f"{results[k][e]['omega_mean']:.6f}"
+                row.append(cell)
+            writer.writerow(row)
+    print(f"Wrote CSV results to {out_csv}")
 
 if __name__ == "__main__":
     main()

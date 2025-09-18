@@ -328,9 +328,6 @@ def analyze_token_category(analyzer, category_name, tokens, top_n=10, max_tokens
     results = []
     
     for i, token in enumerate(tokens[:max_tokens]):
-        if i % 50 == 0:
-            print(f"Processing {i+1}/{min(len(tokens), max_tokens)}")
-        
         result = analyzer.analyze_token_features(token, top_n)
         if result is not None:
             results.append(result)

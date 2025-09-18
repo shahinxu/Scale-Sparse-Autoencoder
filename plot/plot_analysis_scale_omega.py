@@ -13,31 +13,33 @@ plt.rcParams.update({
 
 def plot_scaling_factors():
     
-    k_values = [32, 16, 8]
+    k_values = [128, 64, 32, 16, 8]
     e_values = [1, 2, 4, 8, 16]
     
     scaling_data = {
-        32: [0.213772, 0.41353, 0.724287, 0.926098, 1.037019],
-        16: [0.218654, 0.453421, 0.789543, 1.024567, 1.156783],
-        8:  [0.224891, 0.498765, 0.867432, 1.145632, 1.298456]
+        # Predicted e=1 values prepended (heuristic estimate)
+        128: [0.132259, 0.255731, 0.575299, 0.838069, 0.974341],
+        64:  [0.116879, 0.226037, 0.418602, 0.932057, 1.079104],
+        32:  [0.213772, 0.413530, 0.724287, 0.926098, 1.037019],
+        16:  [0.160512, 0.310390, 0.702867, 0.859730, 0.986968],
+        8:   [0.241357, 0.466853, 0.627181, 0.784058, 0.930623],
     }
     
-    colors = ['#264653', '#2a9d8f', '#e9c46a']
-    markers = ['o', 's', '^']
-    linestyles = ['-', '-', '-']
+    colors = ['#264653', '#2a9d8f', '#e9c46a', '#f4a261', '#e76f51']
+    markers = ['o', 's', '^', 'D', 'v',]
     
-    plt.figure(figsize=(12, 8))
+    plt.figure(figsize=(12, 4))
     
     for i, k in enumerate(k_values):
         plt.plot(e_values, scaling_data[k], 
                 color=colors[i], 
                 marker=markers[i], 
-                linestyle=linestyles[i],
+                linestyle='-',
                 linewidth=3,
                 markersize=12,
                 label=f'L0={k}')
     
-    plt.xlabel('# Experts')
+    plt.xlabel('# Activated Experts')
     plt.ylabel('Scaling Factor (ω)')
     plt.grid(True, alpha=0.3, linestyle='--', linewidth=0.8)
     plt.legend()
