@@ -1,7 +1,6 @@
 import torch as t
 from nnsight import LanguageModel
 from .config import DEBUG
-from nnsight.intervention.graph.proxy import InterventionProxy
 if DEBUG:
     tracer_kwargs = {'scan' : True, 'validate' : True}
 else:

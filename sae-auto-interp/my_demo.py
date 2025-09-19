@@ -37,7 +37,6 @@ def main(advance_path_arg, loop_iteration): # 添加 loop_iteration 参数
     os.makedirs(fuzz_dir, exist_ok=True)
     os.makedirs(explanation_dir, exist_ok=True)
 
-    # Load model and SAEs
     print("Loading LanguageModel...")
     model = LanguageModel("/home/xuzhen/switch_sae/gpt2", device_map="auto", dispatch=True)
     print("Loading SAE autoencoders...")

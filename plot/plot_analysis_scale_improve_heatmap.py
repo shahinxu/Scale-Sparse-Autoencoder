@@ -1,6 +1,6 @@
 import matplotlib.pyplot as plt
 import numpy as np
-from matplotlib.colors import TwoSlopeNorm, LinearSegmentedColormap, ListedColormap
+from matplotlib.colors import LinearSegmentedColormap, ListedColormap
 import os
 
 data_dict = {
@@ -29,17 +29,13 @@ plt.rcParams.update({
 
 fig, ax = plt.subplots(figsize=(12, 8))
 
-# 可通过环境变量或直接改下面的默认值来自定义颜色
-# 现在：正侧从 POS_START -> POS_END；负侧从 NEG_START -> NEG_END
 NEG_START = os.environ.get('NEG_START', '#e9c46a')  # 负侧起色（靠近零）
 NEG_END = os.environ.get('NEG_END', '#e76f51')      # 负侧终色（更负）
 POS_START = os.environ.get('POS_START', '#2a9d8f')  # 正侧起色（较小正值）
 POS_END = os.environ.get('POS_END', '#264653')      # 正侧终色（较大正值）
 MID_COLOR = '#ffffff'  # 中心白色（用于 0）
 
-# Build a colormap composed of a negative gradient (NEG_END -> NEG_START)
-# followed by a positive gradient (POS_START -> POS_END). We reserve the
-# exact zero value by masking it and setting it to white via set_bad.
+
 half = 128
 pos_base = LinearSegmentedColormap.from_list('pos_base', [POS_START, POS_END], N=half)
 pos_samples = pos_base(np.linspace(0, 1, half))
@@ -48,14 +44,12 @@ neg_samples = neg_base(np.linspace(0, 1, half))
 listed_colors = np.vstack((neg_samples, pos_samples))
 custom_cmap = ListedColormap(listed_colors)
 
-# Non-linear mapping parameters (control how strongly values are pushed toward ends)
-POSITIVE_GAMMA = float(os.environ.get('POSITIVE_GAMMA', '0.6'))  # <1 pushes moderate positives toward the right color
-NEGATIVE_GAMMA = float(os.environ.get('NEGATIVE_GAMMA', '0.6'))  # <1 would push moderate negatives toward the left color
+POSITIVE_GAMMA = float(os.environ.get('POSITIVE_GAMMA', '0.6'))
+NEGATIVE_GAMMA = float(os.environ.get('NEGATIVE_GAMMA', '0.6'))
 
 vmin = float(np.nanmin(heatmap_data))
 vmax = float(np.nanmax(heatmap_data))
 
-# Map raw data into a [0,1] scalar for the colormap, using separate transforms for neg/pos
 mapped = np.zeros_like(heatmap_data, dtype=float)
 for ii in range(heatmap_data.shape[0]):
     for jj in range(heatmap_data.shape[1]):
@@ -77,7 +71,6 @@ for ii in range(heatmap_data.shape[0]):
                 t = 0.5 - 0.5 * (t0 ** NEGATIVE_GAMMA)
         mapped[ii, jj] = t
 
-# Mask zeros so they render as white
 mapped_masked = np.ma.masked_invalid(mapped)
 im = ax.imshow(mapped_masked, cmap=custom_cmap, vmin=0.0, vmax=1.0)
 im.cmap.set_bad(color='white')
@@ -85,7 +78,6 @@ im.cmap.set_bad(color='white')
 for i in range(len(experts)):
     for j in range(len(k_values)):
         value = heatmap_data[i, j]
-        # Force annotations to white for consistent readability
         ax.text(j, i, f'{value:.2f}', ha='center', va='center', color='white', fontsize=18, weight='bold')
 
 
@@ -97,7 +89,6 @@ ax.set_yticklabels(experts)
 ax.set_xlabel('Sparsity (L0)')
 ax.set_ylabel('# Experts')
 
-# Create a colorbar that shows original data values by inverting the non-linear mapping
 from matplotlib.ticker import FuncFormatter
 
 def scalar_to_value(scalar: float) -> float:
@@ -108,7 +99,6 @@ def scalar_to_value(scalar: float) -> float:
         return 0.0
     if scalar > 0.5:
         t0 = (scalar - 0.5) / 0.5
-        # invert positive gamma: t0 = (val/vmax)**POSITIVE_GAMMA
         val = (t0 ** (1.0 / POSITIVE_GAMMA)) * vmax if vmax != 0 else 0.0
         return float(val)
     else:
@@ -136,7 +126,6 @@ tick_scalars = [value_to_scalar(v) for v in desired_values]
 cbar = ax.figure.colorbar(im, ax=ax, shrink=0.8, aspect=20, ticks=tick_scalars)
 
 def tick_formatter(x, pos=None):
-    # convert scalar back to value and show minimal decimals
     v = scalar_to_value(x)
     if abs(v - round(v)) < 1e-6:
         return str(int(round(v)))

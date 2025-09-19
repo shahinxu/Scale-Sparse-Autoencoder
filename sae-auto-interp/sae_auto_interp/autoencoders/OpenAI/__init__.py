@@ -15,7 +15,7 @@ from dictionary_learning.trainers.moe_physically import MultiExpertAutoEncoder
 from dictionary_learning.trainers.moe_encoder_physically import MultiEncAutoEncoder
 from dictionary_learning.trainers.moe_decoder_physically import MultiDecAutoEncoder
 from dictionary_learning.trainers.moe_physically_scale import MultiExpertScaleAutoEncoder
-DEVICE = "cuda:3"
+DEVICE = "cuda:0"
 
 
 def load_oai_autoencoders(model, ae_layers: List[int], weight_dir: str):
@@ -27,7 +27,7 @@ def load_oai_autoencoders(model, ae_layers: List[int], weight_dir: str):
         # ae = NoiseAutoEncoder(activation_dim=768, dict_size=32*768, k=32, experts=64, e=8, heaviside=False)
         # ae = ScaleAutoEncoder(activation_dim=768, dict_size=32*768, k=32, experts=64, e=8, heaviside=False)
         # ae = MultiExpertAutoEncoder(activation_dim=768, dict_size=32*768, k=32, experts=64, e=8, heaviside=False)
-        ae = MultiExpertScaleAutoEncoder(activation_dim=768, dict_size=32*768, k=32, experts=64, e=8, heaviside=False)
+        ae = MultiExpertScaleAutoEncoder(activation_dim=768, dict_size=32*768, k=32, experts=16, e=2, heaviside=False)
         # ae = MultiEncAutoEncoder(activation_dim=768, dict_size=32*768, k=32, experts=64, e=8, heaviside=False)
         # ae = MultiDecAutoEncoder(activation_dim=768, dict_size=32*768, k=32, experts=64, e=8, heaviside=False)
         # ae = MoeAutoEncoder(activation_dim=768, dict_size=32*768, k=32, experts=64, e=8, heaviside=False)
@@ -48,9 +48,9 @@ def load_oai_autoencoders(model, ae_layers: List[int], weight_dir: str):
 
         submodule.ae = AutoencoderLatents(ae, partial(_forward, ae), width=32*768)
 
-        submodules[submodule._path] = submodule
+        submodules[submodule.path] = submodule
 
-    with model.edit(" "):
+    with model.edit():
         for _, submodule in submodules.items():
             acts = submodule.output[0]
             submodule.ae(acts, hook=True)

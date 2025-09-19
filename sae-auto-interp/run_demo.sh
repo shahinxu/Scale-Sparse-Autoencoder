@@ -1,9 +1,9 @@
 #!/bin/bash
 
-BASE_ADVANCE_PATH="MultiExpert_Scale"
+BASE_ADVANCE_PATH="MultiExpert_Scale_16_16_2"
 
 # 循环的次数
-NUM_RUNS=1
+NUM_RUNS=10
 
 for i in $(seq 0 $((NUM_RUNS-1))); do
     echo "--- Running iteration $i ---"
