@@ -21,7 +21,7 @@ def load_tokenized_data(
     data = load_dataset(dataset_repo, name=dataset_name, split=dataset_split)
 
     tokens = utils.tokenize_and_concatenate(data, tokenizer, max_length=ctx_len)
-
+    
     tokens = tokens.shuffle(seed)["tokens"]
 
     return tokens

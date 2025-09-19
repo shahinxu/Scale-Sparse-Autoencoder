@@ -18,14 +18,12 @@ from sae_auto_interp.pipeline import Pipe, Pipeline, process_wrapper
 from sae_auto_interp.scorers import FuzzingScorer
 import asyncio
 import random
-import argparse # 导入 argparse 模块
+import argparse
 
-def main(advance_path_arg, loop_iteration): # 添加 loop_iteration 参数
+def main(advance_path_arg, loop_iteration):
     base_path = "/home/xuzhen/switch_sae/dictionaries"
-    # advance_path = "ScaleEncoder" # This will now come from advance_path_arg
     PATH_TO_WEIGHTS = f"{base_path}/{advance_path_arg}/"
 
-    # 根据 loop_iteration 修改 fuzz_dir 和 explanation_dir
     fuzz_dir = f"result/{advance_path_arg}/{advance_path_arg}_{loop_iteration}/gpt2_fuzz"
     explanation_dir = f"result/{advance_path_arg}/{advance_path_arg}_{loop_iteration}/gpt2_explanations"
 
@@ -33,12 +31,11 @@ def main(advance_path_arg, loop_iteration): # 添加 loop_iteration 参数
     print(f"Fuzzing results will be saved to: {fuzz_dir}")
     print(f"Explanations will be saved to: {explanation_dir}")
 
-    # Ensure output directories exist
     os.makedirs(fuzz_dir, exist_ok=True)
     os.makedirs(explanation_dir, exist_ok=True)
 
     print("Loading LanguageModel...")
-    model = LanguageModel("/home/xuzhen/switch_sae/gpt2", device_map="auto", dispatch=True)
+    model = LanguageModel("/home/xuzhen/switch_sae/gpt2", device_map="cuda:3", dispatch=True)
     print("Loading SAE autoencoders...")
     submodule_dict = load_oai_autoencoders(model, [8], PATH_TO_WEIGHTS)
 
@@ -48,10 +45,9 @@ def main(advance_path_arg, loop_iteration): # 添加 loop_iteration 参数
         ctx_len=256,
         tokenizer=model.tokenizer, 
         dataset_repo="openwebtext2",
-        # dataset_repo="/home/xuzhen/switch_sae/openwebtext", # Uncomment if using local path
         dataset_split="train[:15%]",
     )
-
+    tokens = torch.stack(list(tokens))
     # Feature Cache
     print("Running FeatureCache...")
     cache = FeatureCache(model, submodule_dict, batch_size=8)

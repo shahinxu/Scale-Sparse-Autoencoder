@@ -15,7 +15,7 @@ from dictionary_learning.trainers.moe_physically import MultiExpertAutoEncoder
 from dictionary_learning.trainers.moe_encoder_physically import MultiEncAutoEncoder
 from dictionary_learning.trainers.moe_decoder_physically import MultiDecAutoEncoder
 from dictionary_learning.trainers.moe_physically_scale import MultiExpertScaleAutoEncoder
-DEVICE = "cuda:0"
+DEVICE = "cuda:3"
 
 
 def load_oai_autoencoders(model, ae_layers: List[int], weight_dir: str):
