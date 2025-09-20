@@ -13,7 +13,7 @@ dependencies = [
     "datasets",
     "nnsight",
     "orjson",
-    "sae@git+https://github.com/EleutherAI/sae",
+    "eai-sparsify @ git+https://github.com/EleutherAI/sae",
     "safetensors",
     "simple_parsing",
     "torchtyping"

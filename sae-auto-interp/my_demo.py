@@ -1,7 +1,4 @@
 # run_interpretability.py
-
-import pandas as pd
-import matplotlib.pyplot as plt
 import os
 from nnsight import LanguageModel
 from sae_auto_interp.autoencoders import load_oai_autoencoders
@@ -48,9 +45,10 @@ def main(advance_path_arg, loop_iteration):
         dataset_split="train[:15%]",
     )
     tokens = torch.stack(list(tokens))
+    print(f"Loaded {tokens.shape[0]} sequences of length {tokens.shape[1]}.")
     # Feature Cache
     print("Running FeatureCache...")
-    cache = FeatureCache(model, submodule_dict, batch_size=8)
+    cache = FeatureCache(model, submodule_dict, batch_size=2)
     cache.run(n_tokens=10_000_000, tokens=tokens)
     cache.save_splits(n_splits=1, save_dir="raw_features")
 
@@ -65,9 +63,9 @@ def main(advance_path_arg, loop_iteration):
 
     sample_cfg = ExperimentConfig()
 
-    modules = [f".transformer.h.{8}"]
+    modules = [f"model.transformer.h.{8}"]
 
-    features = {mod: torch.tensor(random.sample(range(cfg.width), 20_000)) for mod in modules}
+    features = {mod: torch.tensor(random.sample(range(cfg.width), 1000)) for mod in modules}
 
     dataset = FeatureDataset(
         raw_dir='raw_features',

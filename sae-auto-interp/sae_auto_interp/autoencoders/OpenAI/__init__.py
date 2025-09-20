@@ -7,14 +7,10 @@ from ..wrapper import AutoencoderLatents
 import os
 import sys
 sys.path.append(os.path.abspath("/home/xuzhen/switch_sae"))
-from dictionary_learning.trainers.switch import SwitchAutoEncoder
-from dictionary_learning.trainers.moe_logically_noise import NoiseAutoEncoder
-from dictionary_learning.trainers.moe_logically import MoeAutoEncoder
-from dictionary_learning.trainers.moe_logically_scale import ScaleAutoEncoder
 from dictionary_learning.trainers.moe_physically import MultiExpertAutoEncoder
-from dictionary_learning.trainers.moe_encoder_physically import MultiEncAutoEncoder
-from dictionary_learning.trainers.moe_decoder_physically import MultiDecAutoEncoder
 from dictionary_learning.trainers.moe_physically_scale import MultiExpertScaleAutoEncoder
+from dictionary_learning.dictionary import GatedAutoEncoder
+from dictionary_learning.trainers.top_k import AutoEncoderTopK
 DEVICE = "cuda:3"
 
 
@@ -24,14 +20,10 @@ def load_oai_autoencoders(model, ae_layers: List[int], weight_dir: str):
     for layer in ae_layers:
         path = f"{weight_dir}/{layer}.pt"
         state_dict = torch.load(path)
-        # ae = NoiseAutoEncoder(activation_dim=768, dict_size=32*768, k=32, experts=64, e=8, heaviside=False)
-        # ae = ScaleAutoEncoder(activation_dim=768, dict_size=32*768, k=32, experts=64, e=8, heaviside=False)
-        # ae = MultiExpertAutoEncoder(activation_dim=768, dict_size=32*768, k=32, experts=64, e=8, heaviside=False)
-        ae = MultiExpertScaleAutoEncoder(activation_dim=768, dict_size=32*768, k=32, experts=16, e=2, heaviside=False)
-        # ae = MultiEncAutoEncoder(activation_dim=768, dict_size=32*768, k=32, experts=64, e=8, heaviside=False)
-        # ae = MultiDecAutoEncoder(activation_dim=768, dict_size=32*768, k=32, experts=64, e=8, heaviside=False)
-        # ae = MoeAutoEncoder(activation_dim=768, dict_size=32*768, k=32, experts=64, e=8, heaviside=False)
-        # ae = SwitchAutoEncoder(activation_dim=768, dict_size=32*768, k=32, experts=64, heaviside=False)
+        # ae = MultiExpertAutoEncoder(activation_dim=768, dict_size=32*768, k=32, experts=32, e=1, heaviside=False)
+        # ae = MultiExpertScaleAutoEncoder(activation_dim=768, dict_size=32*768, k=32, experts=16, e=2, heaviside=False)
+        ae = AutoEncoderTopK(activation_dim=768, dict_size=768, k=32)
+        # ae = GatedAutoEncoder(activation_dim=768, dict_size=768)
 
         ae.load_state_dict(state_dict)
         ae.to(DEVICE)
@@ -43,10 +35,16 @@ def load_oai_autoencoders(model, ae_layers: List[int], weight_dir: str):
             latents.scatter_(1, top_indices, top_acts)
             latents = latents.view(x.shape[0], x.shape[1], -1)
             return latents
+        # def _forward(ae, x):
+        #     # Reshape from (batch, seq, dim) to (batch * seq, dim)
+        #     latents = ae.encode(x.view(-1, x.shape[-1]))
+        #     # Reshape back to (batch, seq, dict_size)
+        #     latents = latents.view(x.shape[0], x.shape[1], -1)
+        #     return latents
 
         submodule = model.transformer.h[layer]
 
-        submodule.ae = AutoencoderLatents(ae, partial(_forward, ae), width=32*768)
+        submodule.ae = AutoencoderLatents(ae, partial(_forward, ae), width=768)
 
         submodules[submodule.path] = submodule
 
