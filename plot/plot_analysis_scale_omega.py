@@ -4,11 +4,11 @@ import numpy as np
 
 # 设置matplotlib参数
 plt.rcParams.update({
-    'font.size': 22,
-    'axes.labelsize': 22,
-    'xtick.labelsize': 20,
-    'ytick.labelsize': 20,
-    'legend.fontsize': 18,
+    'font.size': 16,
+    'axes.labelsize': 16,
+    'xtick.labelsize': 16,
+    'ytick.labelsize': 16,
+    'legend.fontsize': 16,
 })
 
 def plot_scaling_factors():

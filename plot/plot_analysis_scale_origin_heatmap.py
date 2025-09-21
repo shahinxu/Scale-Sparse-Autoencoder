@@ -19,11 +19,11 @@ experts = data_dict['expert_values']
 k_values = data_dict['k_values']
 
 plt.rcParams.update({
-    'font.size': 22,
-    'axes.labelsize': 22,
-    'xtick.labelsize': 20,
-    'ytick.labelsize': 20,
-    'legend.fontsize': 20,
+    'font.size': 26,
+    'axes.labelsize': 26,
+    'xtick.labelsize': 24,
+    'ytick.labelsize': 24,
+    'legend.fontsize': 24,
 })
 
 fig, ax = plt.subplots(figsize=(12, 8))

@@ -30,26 +30,26 @@ def main():
     model = LanguageModel(lm, dispatch=True, device_map=device)
     
     custom_texts = [
-        "The cat sat on the mat.",
-        "She walked to the store yesterday.",
+        # "The cat sat on the mat.",
+        # "She walked to the store yesterday.",
         
-        "The answer is 42 plus 17 equals 59.",
-        "In 2023, the temperature was -15.7 degrees.",
+        # "The answer is 42 plus 17 equals 59.",
+        # "In 2023, the temperature was -15.7 degrees.",
         
-        "Barack Obama was born in Hawaii.",
-        "Microsoft Corporation develops Windows.",
+        # "Barack Obama was born in Hawaii.",
+        # "Microsoft Corporation develops Windows.",
         
-        "Twenty-first-century nano-technology is amazing.",
-        "Self-driving cars use state-of-the-art AI.",
+        # "Twenty-first-century nano-technology is amazing.",
+        # "Self-driving cars use state-of-the-art AI.",
         
-        "Wait... what? Really?! That's @incredible#hashtag!",
-        "Visit https://www.example.com for more info.",
+        # "Wait... what? Really?! That's @incredible#hashtag!",
+        # "Visit https://www.example.com for more info.",
         
-        "DNA contains adenine, thymine, guanine, and cytosine.",
-        "The algorithm uses gradient descent optimization.",
+        # "DNA contains adenine, thymine, guanine, and cytosine.",
+        # "The algorithm uses gradient descent optimization.",
         
-        "I feel extremely happy and grateful today.",
-        "Love, hope, and freedom are universal values.",
+        # "I feel extremely happy and grateful today.",
+        # "Love, hope, and freedom are universal values.",
         
         "I love apples but hate oranges completely.",
         "This is not impossible, it's just difficult.",

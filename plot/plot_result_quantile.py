@@ -5,11 +5,11 @@ markers = ['o', 's', '^', 'D', 'v', '*']
 colors = ['#264653', '#2a9d8f', '#e9c46a', '#0f4c5c', '#e76f51', '#f4a261']
 
 plt.rcParams.update({
-    'font.size': 22,
-    'axes.labelsize': 22,
-    'xtick.labelsize': 20,
-    'ytick.labelsize': 20,
-    'legend.fontsize': 20,
+    'font.size': 28,
+    'axes.labelsize': 28,
+    'xtick.labelsize': 24,
+    'ytick.labelsize': 24,
+    'legend.fontsize': 24,
 })
 
 quantile_labels = ['not'] + [str(i) for i in np.arange(1, 11)]

@@ -5,11 +5,11 @@ markers = ['o', 's', '^', 'D', 'v', '*']  # Circle, Square, Up Triangle, Diamond
 colors = ['#264653', '#2a9d8f', '#e9c46a', '#f4a261', '#e76f51', '#0f4c5c']  # Added a sixth color for the sixth marker
 
 plt.rcParams.update({
-    'font.size': 22,
-    'axes.labelsize': 22,
-    'xtick.labelsize': 20,
-    'ytick.labelsize': 20,
-    'legend.fontsize': 20,
+    'font.size': 28,
+    'axes.labelsize': 28,
+    'xtick.labelsize': 28,
+    'ytick.labelsize': 28,
+    'legend.fontsize': 24,
 })
 
 k_values = [2, 4, 8, 16, 32, 64, 128]

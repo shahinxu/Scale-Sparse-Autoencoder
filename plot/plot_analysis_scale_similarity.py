@@ -48,11 +48,11 @@ experts_16, plain_list_16, scale_list_16 = process_data(rows_l0_16)
 experts_32, plain_list_32, scale_list_32 = process_data(rows_l0_32)
 
 plt.rcParams.update({
-    'font.size': 22,
-    'axes.labelsize': 22,
-    'xtick.labelsize': 20,
-    'ytick.labelsize': 20,
-    'legend.fontsize': 20,
+    'font.size': 28,
+    'axes.labelsize': 28,
+    'xtick.labelsize': 28,
+    'ytick.labelsize': 28,
+    'legend.fontsize': 24,
 })
 
 fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 8))
@@ -68,7 +68,7 @@ ax1.set_xticklabels(experts_16)
 ax1.set_xlabel('# Experts')
 ax1.set_ylabel('Ratio')
 ax1.set_ylim(0, 0.035)
-ax1.set_title('L0=16')
+ax1.set_title('L0=16', size=28)
 ax1.legend()
 ax1.grid(True, alpha=0.3, linestyle='--', linewidth=0.8)
 
@@ -79,13 +79,13 @@ ax2.set_xticks(x)
 ax2.set_xticklabels(experts_32)
 ax2.set_xlabel('# Experts')
 ax2.set_ylim(0, 0.035)
-ax2.set_title('L0=32')
+ax2.set_title('L0=32', size=28)
 ax2.set_yticklabels([])
 ax2.grid(True, alpha=0.3, linestyle='--', linewidth=0.8)
 
 plt.tight_layout()
 
-outpath = 'analysis_scale_simialrity_heatmap.png'
+outpath = 'analysis_scale_similarity_heatmap.png'
 plt.savefig(outpath, dpi=300, bbox_inches='tight')
 plt.close()
 print(f'Saved plot to {outpath}')
