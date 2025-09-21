@@ -15,11 +15,11 @@ markers = ['o', 's', '^', 'D', 'v']
 colors = ['#264653', '#2a9d8f', '#e9c46a', '#f4a261', '#e76f51']
 
 plt.rcParams.update({
-    'font.size': 22,
-    'axes.labelsize': 22,
-    'xtick.labelsize': 20,
-    'ytick.labelsize': 20,
-    'legend.fontsize': 20,
+    'font.size': 28,
+    'axes.labelsize': 28,
+    'xtick.labelsize': 28,
+    'ytick.labelsize': 28,
+    'legend.fontsize': 26,
 })
 
 plt.figure(figsize=(12, 8))
@@ -50,7 +50,7 @@ ax.yaxis.set_major_locator(mticker.LogLocator(base=10.0))
 ax.yaxis.set_major_formatter(mticker.LogFormatterMathtext(base=10.0))
 ax.yaxis.set_minor_locator(mticker.NullLocator())
 
-plt.legend(loc='upper right', frameon=True)
+plt.legend(loc='lower left', frameon=True)
 
 plt.grid(True, alpha=0.3, linestyle='--', linewidth=0.8)
 

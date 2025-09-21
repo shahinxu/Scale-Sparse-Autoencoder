@@ -7,8 +7,8 @@ colors = ['#264653', '#2a9d8f', '#e9c46a', '#0f4c5c', '#e76f51', '#f4a261']
 plt.rcParams.update({
     'font.size': 28,
     'axes.labelsize': 28,
-    'xtick.labelsize': 24,
-    'ytick.labelsize': 24,
+    'xtick.labelsize': 28,
+    'ytick.labelsize': 28,
     'legend.fontsize': 24,
 })
 

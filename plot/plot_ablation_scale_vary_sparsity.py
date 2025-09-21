@@ -17,11 +17,11 @@ with_scale_mse_16 = np.array([4406.951172, 3567.803467, 2899.781738, 2230.072266
 with_scale_recovered_16 = np.array([0.881088138, 0.916454613, 0.967925906, 0.970453382, 0.975340843, 0.982173383, 0.990958631])
 
 plt.rcParams.update({
-    'font.size': 22,
-    'axes.labelsize': 22,
-    'xtick.labelsize': 20,
-    'ytick.labelsize': 20,
-    'legend.fontsize': 20,
+    'font.size': 28,
+    'axes.labelsize': 28,
+    'xtick.labelsize': 28,
+    'ytick.labelsize': 28,
+    'legend.fontsize': 24,
 })
 
 x = np.arange(len(k_values))
@@ -33,17 +33,18 @@ fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 8), sharex=True, gridspec_kw={
 rects1 = ax1.bar(x - width/2, no_scale_mse_8, width, label='Plain', color='#264653', hatch='///')
 rects2 = ax1.bar(x + width/2, with_scale_mse_8, width, label='Scale', color='#2a9d8f', hatch='\\\\')
 ax1_twin = ax1.twinx()
-rects3 = ax1_twin.bar(x - width/2, no_scale_recovered_8, width, color='#264653', hatch='///')
-rects4 = ax1_twin.bar(x + width/2, with_scale_recovered_8, width, color='#2a9d8f', hatch='\\\\')
+rects3 = ax1_twin.bar(x - width/2, no_scale_recovered_8, width, label='Plain', color='#264653', hatch='///')
+rects4 = ax1_twin.bar(x + width/2, with_scale_recovered_8, width, label='Scale', color='#2a9d8f', hatch='\\\\')
 ax1.set_ylabel('MSE')
 ax1_twin.set_ylabel('Loss Recovered')
 ax1_twin.invert_yaxis()
-ax1.set_title('# activated experts = 8')
+ax1.set_title('# activated experts = 8', size=28)
 ax1.grid(axis='y', alpha=0.3, linestyle='--', linewidth=0.8)
 ax1.set_ylim(800, 8800)
 ax1_twin.set_ylim(1.0, 0.85)
-ax1_twin.set_yticks(np.linspace(1, 0.85, 6))
-ax1.legend(loc='lower left', frameon=True)
+ax1_twin.set_yticks(np.linspace(1, 0.85, 4))
+
+ax1_twin.legend(loc='upper right', frameon=True)
 # expert=16
 rects5 = ax2.bar(x - width/2, no_scale_mse_16, width, label='Plain', color='#264653', hatch='///')
 rects6 = ax2.bar(x + width/2, with_scale_mse_16, width, label='Scale', color='#2a9d8f', hatch='\\\\')
@@ -53,11 +54,11 @@ rects8 = ax2_twin.bar(x + width/2, with_scale_recovered_16, width, color='#2a9d8
 ax2.set_ylabel('MSE')
 ax2_twin.set_ylabel('Loss Recovered')
 ax2_twin.invert_yaxis()
-ax2.set_title('# activated experts = 16')
+ax2.set_title('# activated experts = 16', size=28)
 ax2.grid(axis='y', alpha=0.3, linestyle='--', linewidth=0.8)
 ax2.set_ylim(800, 10800)
 ax2_twin.set_ylim(1.0, 0.85)
-ax2_twin.set_yticks(np.linspace(1, 0.85, 6))
+ax2_twin.set_yticks(np.linspace(1, 0.85, 4))
 
 # 只在最下面的图显示横坐标和标签
 ax2.set_xlabel('Sparsity (L0)')

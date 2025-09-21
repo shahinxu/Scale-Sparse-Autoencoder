@@ -62,11 +62,11 @@ with_scale_loss_recovered_32 = {
 }
 
 plt.rcParams.update({
-    'font.size': 22,
-    'axes.labelsize': 22,
-    'xtick.labelsize': 20,
-    'ytick.labelsize': 20,
-    'legend.fontsize': 20,
+    'font.size': 28,
+    'axes.labelsize': 28,
+    'xtick.labelsize': 28,
+    'ytick.labelsize': 28,
+    'legend.fontsize': 24,
 })
 
 x = np.arange(len(k_values))
@@ -83,7 +83,7 @@ rects4 = ax1_twin.bar(x + width/2, [with_scale_loss_recovered_2[k] for k in k_va
 ax1.set_ylabel('MSE')
 ax1_twin.set_ylabel('Loss Recovered')
 ax1_twin.invert_yaxis()
-ax1.set_title('L0=2')
+ax1.set_title('L0=2', size=28)
 ax1.grid(axis='y', alpha=0.3, linestyle='--', linewidth=0.8)
 ax1.set_ylim(3800, 6000)
 ax1_twin.set_ylim(1.0, 0.84)
@@ -99,11 +99,11 @@ rects8 = ax2_twin.bar(x + width/2, [with_scale_loss_recovered_32[k] for k in k_v
 ax2.set_ylabel('MSE')
 ax2_twin.set_ylabel('Loss Recovered')
 ax2_twin.invert_yaxis()
-ax2.set_title('L0=32')
+ax2.set_title('L0=32', size=28)
 ax2.grid(axis='y', alpha=0.3, linestyle='--', linewidth=0.8)
 ax2.set_ylim(1200, 3000)
 ax2_twin.set_ylim(1.0, 0.95)
-ax2_twin.set_yticks(np.linspace(1, 0.95, 6))
+ax2_twin.set_yticks(np.linspace(1, 0.95, 3))
 
 # 只在最下面的图显示横坐标和标签
 ax2.set_xlabel('Sparsity (L0)')
