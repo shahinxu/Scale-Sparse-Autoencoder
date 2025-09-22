@@ -11,11 +11,11 @@ def create_token_visualization(token_text, batch_idx, token_pos,
     """创建token可视化 - 将每个子图保存为独立的图像文件。"""
     
     plt.rcParams.update({
-        'font.size': 22,
-        'axes.labelsize': 22,
-        'xtick.labelsize': 20,
-        'ytick.labelsize': 20,
-        'legend.fontsize': 20,
+        'font.size': 28,
+        'axes.labelsize': 28,
+        'xtick.labelsize': 26,
+        'ytick.labelsize': 28,
+        'legend.fontsize': 26,
     })
 
     try:
@@ -106,8 +106,8 @@ def create_token_visualization(token_text, batch_idx, token_pos,
             lines1, labels1 = ax1.get_legend_handles_labels()
             lines2, labels2 = ax1_twin.get_legend_handles_labels()
             ax1.legend(lines1 + lines2, labels1 + labels2, loc='upper right')
-            
-            fig1.savefig(f"{base_filename}_1_expert_overview.png", dpi=300, bbox_inches='tight')
+
+            fig1.savefig(f"{base_filename}_1_expert_overview.png", dpi=300)
             plt.close(fig1)
 
         if expert_activations:
@@ -143,7 +143,7 @@ def create_token_visualization(token_text, batch_idx, token_pos,
                 ax3.set_xticklabels(x_labels)
             ax3.grid(axis='y', alpha=0.3, linestyle='--', linewidth=0.8)
             
-            fig3.savefig(f"{base_filename}_3_activation_values.png", dpi=300, bbox_inches='tight')
+            fig3.savefig(f"{base_filename}_3_activation_values.png", dpi=300)
             plt.close(fig3)
 
         positive_values = top_k_values[top_k_values > 0]

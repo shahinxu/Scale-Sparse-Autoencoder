@@ -6,11 +6,11 @@ import matplotlib.pyplot as plt
 GPU = "5"
 
 plt.rcParams.update({
-    'font.size': 22,
-    'axes.labelsize': 22,
-    'xtick.labelsize': 20,
-    'ytick.labelsize': 20,
-    'legend.fontsize': 20,
+    'font.size': 28,
+    'axes.labelsize': 28,
+    'xtick.labelsize': 28,
+    'ytick.labelsize': 28,
+    'legend.fontsize': 26,
 })
 
 
@@ -122,10 +122,10 @@ def main():
     ax1.bar(x + width/2, inter_max_ratio_list_16, width, label='inter-expert', color='#2a9d8f', hatch='\\\\')
     ax1.set_xticks(x)
     ax1.set_xticklabels(activations)
-    ax1.set_xlabel('# Experts')
+    ax1.set_xlabel('# Activated Experts')
     ax1.set_ylabel('Ratio')
     ax1.set_ylim(0, 0.006)
-    ax1.set_title('L0=16')
+    ax1.set_title('L0=16', size=28)
     ax1.legend()
     ax1.grid(True, alpha=0.3, linestyle='--', linewidth=0.8)
 
@@ -134,9 +134,9 @@ def main():
     ax2.bar(x + width/2, inter_max_ratio_list_32, width, color='#2a9d8f', hatch='\\\\')
     ax2.set_xticks(x)
     ax2.set_xticklabels(activations)
-    ax2.set_xlabel('# Experts')
+    ax2.set_xlabel('# Activated Experts')
     ax2.set_ylim(0, 0.006)
-    ax2.set_title('L0=32')
+    ax2.set_title('L0=32', size=28)
     ax2.set_yticklabels([])
     ax2.grid(True, alpha=0.3, linestyle='--', linewidth=0.8)
 

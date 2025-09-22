@@ -11,15 +11,15 @@ import re
 import json
 
 plt.rcParams.update({
-    'font.size': 22,
-    'axes.labelsize': 22,
-    'xtick.labelsize': 20,
-    'ytick.labelsize': 20,
-    'legend.fontsize': 20,
+    'font.size': 28,
+    'axes.labelsize': 28,
+    'xtick.labelsize': 28,
+    'ytick.labelsize': 28,
+    'legend.fontsize': 26,
 })
 
 
-GPU = "0"
+GPU = "4"
 EXPERTS = 64
 LAYER = 8
 ACT_DIM = 768
@@ -627,7 +627,7 @@ def main():
     ax1.set_xlabel('Expert Rank')
     ax1.set_ylabel('CDF')
     ax1.set_ylim(0, 1)
-    ax1.set_title('L0=16')
+    ax1.set_title('L0=16', size=28)
     ax1.grid(True, alpha=0.3, linestyle='--', linewidth=0.8)
     ax1.legend(loc='lower right')
 
@@ -638,7 +638,7 @@ def main():
     ax2.step(xE4_32, cE_32, where='pre', color='#e76f51', linewidth=3)
     ax2.set_xlabel('Expert Rank')
     ax2.set_ylim(0, 1)
-    ax2.set_title('L0=32')
+    ax2.set_title('L0=32', size=28)
     ax2.set_yticklabels([])
     ax2.grid(True, alpha=0.3, linestyle='--', linewidth=0.8)
 
