@@ -11,6 +11,135 @@ from typing import Dict, Any, Iterable, List
 import pyarrow.parquet as pq
 
 
+def loss_recovered_specialized(
+    text: List[str] | t.Tensor,
+    model: LanguageModel,
+    submodule,
+    dictionary: MultiExpertScaleAutoEncoder,
+    max_len: int | None = None,
+    normalize_batch: bool = False,
+    io: str = "out",
+    tracer_args = {'use_cache': False, 'output_attentions': False},
+):
+    if isinstance(text, t.Tensor):
+        invoker_args = {}
+    else:
+        if max_len is None:
+            invoker_args = {}
+        else:
+            invoker_args = {"truncation": True, "max_length": max_len, "padding": True}
+
+    # detect tuple output
+    with model.trace("_"):
+        temp_output = submodule.output.save()
+    output_is_tuple = (type(temp_output) == tuple)
+
+    # original
+    with model.trace(text, invoker_args=invoker_args):
+        logits_original = model.output.save()
+
+    # capture x for reconstruction
+    with model.trace(text, **tracer_args, invoker_args=invoker_args):
+        if io == 'in':
+            x = submodule.input
+            if normalize_batch:
+                scale = (dictionary.activation_dim ** 0.5) / x.norm(dim=-1).mean()
+                x = x * scale
+        elif io == 'out':
+            x = submodule.output
+            if output_is_tuple:
+                x = x[0]
+            if normalize_batch:
+                scale = (dictionary.activation_dim ** 0.5) / x.norm(dim=-1).mean()
+                x = x * scale
+        elif io == 'in_and_out':
+            x = submodule.input
+            if normalize_batch:
+                scale = (dictionary.activation_dim ** 0.5) / x.norm(dim=-1).mean()
+                x = x * scale
+        else:
+            raise ValueError(f"Invalid value for io: {io}")
+        x = x.save()
+
+    assert len(x.shape) == 3, f"Expected x to have shape (B, L, D), got {x.shape}"
+    x_hat = dictionary(x).to(model.dtype)
+
+    # intervene with x_hat
+    with model.trace(text, **tracer_args, invoker_args=invoker_args):
+        if io == 'in':
+            xin = submodule.input
+            if normalize_batch:
+                scale = (dictionary.activation_dim ** 0.5) / xin.norm(dim=-1).mean()
+                x_hat = x_hat / scale
+            submodule.input[:] = x_hat
+        elif io == 'out':
+            xout = submodule.output
+            if output_is_tuple:
+                xout = xout[0]
+            if normalize_batch:
+                scale = (dictionary.activation_dim ** 0.5) / xout.norm(dim=-1).mean()
+                x_hat = x_hat / scale
+            if output_is_tuple:
+                submodule.output[0][:] = x_hat
+            else:
+                submodule.output[:] = x_hat
+        elif io == 'in_and_out':
+            xin = submodule.input
+            if normalize_batch:
+                scale = (dictionary.activation_dim ** 0.5) / xin.norm(dim=-1).mean()
+                x_hat = x_hat / scale
+            if output_is_tuple:
+                submodule.output[0][:] = x_hat
+            else:
+                submodule.output[:] = x_hat
+        else:
+            raise ValueError(f"Invalid value for io: {io}")
+        logits_reconstructed = model.output.save()
+
+    # intervene with zeros
+    with model.trace(text, **tracer_args, invoker_args=invoker_args):
+        if io == 'in':
+            xin = submodule.input
+            submodule.input[:] = t.zeros_like(xin)
+        elif io in ['out', 'in_and_out']:
+            xout = submodule.output
+            if output_is_tuple:
+                submodule.output[0][:] = t.zeros_like(xout[0])
+            else:
+                submodule.output[:] = t.zeros_like(xout)
+        else:
+            raise ValueError(f"Invalid value for io: {io}")
+        inputs_saved = model.inputs.save()
+        logits_zero = model.output.save()
+
+    # get logits tensors
+    try:
+        logits_original = logits_original.logits
+        logits_reconstructed = logits_reconstructed.logits
+        logits_zero = logits_zero.logits
+    except Exception:
+        pass
+
+    # tokens
+    if isinstance(text, t.Tensor):
+        tokens = text
+    else:
+        try:
+            tokens = inputs_saved[1]['input_ids']
+        except Exception:
+            tokens = inputs_saved[1]['input']
+
+    # CE losses
+    loss_kwargs = {'ignore_index': model.tokenizer.pad_token_id} if getattr(model, 'tokenizer', None) is not None else {}
+    losses = []
+    for logits in [logits_original, logits_reconstructed, logits_zero]:
+        loss = t.nn.CrossEntropyLoss(**loss_kwargs)(
+            logits[:, :-1, :].reshape(-1, logits.shape[-1]), tokens[:, 1:].reshape(-1)
+        )
+        losses.append(loss)
+    return tuple(losses)
+
+
 def compute_mse_dataset(
     ae: MultiExpertScaleAutoEncoder,
     model: LanguageModel,
@@ -23,9 +152,11 @@ def compute_mse_dataset(
     tracer_validate: bool = False,
 ) -> Dict[str, Any]:
     ae.eval()
-    total_se = 0.0
+    sum_batch_mse = 0.0
     total_elems = 0
     total_samples = 0
+    sum_frac_recovered = 0.0
+    num_batches = 0
 
     tracer_kwargs = {'scan': tracer_scan, 'validate': tracer_validate}
 
@@ -34,6 +165,7 @@ def compute_mse_dataset(
             if batch_idx >= eval_batches:
                 break
 
+            # Tokenize explicitly to enforce ctx_len and padding
             tok = model.tokenizer(
                 texts,
                 return_tensors='pt',
@@ -41,24 +173,26 @@ def compute_mse_dataset(
                 truncation=True,
                 max_length=ctx_len,
             )
+            input_ids = tok['input_ids']
+            attn_mask_tok = tok.get('attention_mask', None)
 
-            if 'attention_mask' not in tok:
-                attn_mask = (tok['input_ids'] != model.tokenizer.pad_token_id).long()
-                tok['attention_mask'] = attn_mask
-
-            with model.trace(tok, **tracer_kwargs):
+            # Trace forward using token IDs only to avoid kwarg collisions
+            with model.trace(input_ids, **tracer_kwargs):
                 hidden_states_node = submodule.output.save()
-                model_input_node = model.input.save()
 
-            hidden_states = hidden_states_node.value
+            # Resolve saved output to a real tensor, handling tuple outputs
+            try:
+                hidden_states = hidden_states_node.value
+            except Exception:
+                hidden_states = hidden_states_node
             if isinstance(hidden_states, tuple):
                 hidden_states = hidden_states[0]
 
-            try:
-                attn_mask = model_input_node.value[1]['attention_mask']
-            except Exception:
-                # Fallback to tokenizer-produced mask
-                attn_mask = tok['attention_mask']
+            # Use tokenizer-produced attention mask if available; else treat all tokens as valid
+            if attn_mask_tok is not None:
+                attn_mask = attn_mask_tok.to(hidden_states.device)
+            else:
+                attn_mask = t.ones(hidden_states.shape[:2], dtype=t.long, device=hidden_states.device)
 
             # Filter padded positions
             mask = attn_mask.to(hidden_states.device).bool()
@@ -71,17 +205,34 @@ def compute_mse_dataset(
 
             x = kept.to(device)
             x_hat = ae(x)
-            se = t.nn.functional.mse_loss(x_hat, x, reduction='sum')
-            total_se += float(se.item())
+            e = x - x_hat
+            recon_mse = e.pow(2).sum(dim=-1).mean()
+            sum_batch_mse += float(recon_mse.item())
+            # compute frac_recovered for this batch
+            try:
+                # Pass pre-tokenized input_ids to ensure length safety
+                loss_o, loss_r, loss_z = loss_recovered_specialized(
+                    input_ids.to(model.device), model, submodule, ae, max_len=ctx_len,
+                    normalize_batch=False, io='out',
+                    tracer_args={'use_cache': False, 'output_attentions': False}
+                )
+                denom = (loss_o - loss_z).item()
+                frac_rec = ((loss_r - loss_z) / (loss_o - loss_z)).item() if denom != 0 else float('nan')
+            except Exception:
+                frac_rec = float('nan')
+            sum_frac_recovered += frac_rec
+            num_batches += 1
+            # 可选统计信息
             total_elems += x.numel()
             total_samples += x.shape[0]
 
-    mse = total_se / total_elems if total_elems > 0 else float('nan')
+    mse = (sum_batch_mse / num_batches) if num_batches > 0 else float('nan')
     return {
         'mse': mse,
+        'frac_recovered': (sum_frac_recovered / num_batches) if num_batches > 0 else float('nan'),
         'total_elements': int(total_elems),
         'total_samples': int(total_samples),
-        'batches': int(min(eval_batches, batch_idx + 1) if total_elems > 0 else 0),
+        'batches': int(num_batches),
     }
 
 
@@ -125,32 +276,30 @@ def qa_parquet_text_iter(parquet_path: str, fields=("question", "rationale")) ->
             if text:
                 yield text
 
-
-def batchify(iterator: Iterable[str], batch_size: int, repeat: bool = True) -> Iterable[List[str]]:
-    buf: List[str] = []
+def qa_parquet_text_stream(parquet_path: str, fields=("question", "rationale")) -> Iterable[str]:
+    """Infinite stream that cycles over the QA parquet file repeatedly."""
     while True:
-        for item in iterator:
-            buf.append(item)
-            if len(buf) >= batch_size:
-                yield buf
-                buf = []
-        if buf and not repeat:
+        for x in qa_parquet_text_iter(parquet_path, fields=fields):
+            yield x
+
+
+def batchify(iterator: Iterable[str], batch_size: int) -> Iterable[List[str]]:
+    """Group an iterator of strings into batches; works with endless iterators."""
+    buf: List[str] = []
+    for item in iterator:
+        buf.append(item)
+        if len(buf) >= batch_size:
             yield buf
-        if not repeat:
-            break
-        # restart the underlying iterator
-        iterator = iter(iterator)
+            buf = []
 
 
 def get_model_max_ctx_len(model: LanguageModel, default: int = 1024) -> int:
-    # Prefer HF config if available
     try:
         n_pos = getattr(model.config, 'n_positions', None)
         if isinstance(n_pos, int) and n_pos > 0:
             return n_pos
     except Exception:
         pass
-    # Fallback to tokenizer
     try:
         mlen = getattr(model.tokenizer, 'model_max_length', None)
         if isinstance(mlen, int) and 0 < mlen < 10_000_000:
@@ -168,12 +317,10 @@ def main():
     parser.add_argument("--num_experts", nargs="+", type=int, required=True)
     parser.add_argument("--es", nargs="+", type=int, required=True)
     parser.add_argument("--heavisides", nargs="+", type=str2bool, required=True)
-    # dataset args
     parser.add_argument("--dataset_name", type=str, default="wikitext")
     parser.add_argument("--dataset_config", type=str, default="wikitext-103-raw-v1")
     parser.add_argument("--split", type=str, default="test")
     parser.add_argument("--max_length", type=int, default=128)
-    # eval args
     parser.add_argument("--ctx_len", type=int, default=128)
     parser.add_argument("--batch_size", type=int, default=512)
     parser.add_argument("--eval_batches", type=int, default=50)
@@ -183,18 +330,26 @@ def main():
     model = LanguageModel(lm, dispatch=True, device_map=device)
     submodule = model.transformer.h[layer]
 
-    # Enforce safe max context length
     model_max = get_model_max_ctx_len(model, default=1024)
     if args.ctx_len > model_max:
         print(f"[warn] ctx_len {args.ctx_len} > model max {model_max}; clamping to {model_max}")
         args.ctx_len = model_max
 
-    # Fixed QA dataset
+    # Ensure tokenizer has a pad token (GPT-2 often lacks one)
+    try:
+        tok = model.tokenizer
+        if getattr(tok, 'pad_token_id', None) is None:
+            if getattr(tok, 'eos_token_id', None) is not None:
+                tok.pad_token = tok.eos_token
+                tok.pad_token_id = tok.eos_token_id
+    except Exception:
+        pass
+
     qa_path = os.path.join('QA', 'test_sampled_biology_medicine.parquet')
     if not os.path.exists(qa_path):
         raise FileNotFoundError(f"Expected QA parquet at {qa_path}")
-    text_iter = qa_parquet_text_iter(qa_path, fields=("question", "rationale"))
-    text_batch_iter = batchify(text_iter, batch_size=args.batch_size, repeat=True)
+    text_iter = qa_parquet_text_stream(qa_path, fields=("question", "rationale"))
+    text_batch_iter = batchify(text_iter, batch_size=args.batch_size)
 
     base_cfg = {
         'dict_class': MultiExpertScaleAutoEncoder,
