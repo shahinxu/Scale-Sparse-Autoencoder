@@ -2,6 +2,9 @@ from nnsight import LanguageModel
 import torch as t
 from dictionary_learning.utils import cfg_filename, str2bool
 from dictionary_learning.trainers.moe_physically_scale import MultiExpertScaleAutoEncoder
+from dictionary_learning.trainers.moe_physically import MultiExpertAutoEncoder
+from dictionary_learning.trainers.top_k import AutoEncoderTopK
+from dictionary_learning.dictionary import GatedAutoEncoder
 import argparse
 import itertools
 from config import lm, activation_dim, layer
@@ -263,6 +266,86 @@ def load_scale_ae_or_fallback(cfg: Dict[str, Any], device: str) -> MultiExpertSc
     return ae
 
 
+def load_moe_or_fallback(cfg: Dict[str, Any], device: str) -> MultiExpertAutoEncoder:
+    k = cfg['k']; experts = cfg['experts']; e = cfg['e']; heaviside = cfg['heaviside']
+    dir_path = os.path.join('dictionaries', cfg_filename(cfg))
+    ckpt_path = os.path.join(dir_path, 'ae.pt')
+    if os.path.exists(ckpt_path):
+        return MultiExpertAutoEncoder.from_pretrained(
+            ckpt_path, k=k, experts=experts, e=e, heaviside=heaviside, device=device,
+            activation_dim=activation_dim, dict_size=cfg['dict_size']
+        )
+    # Fallback pattern used previously
+    alt_ckpt = os.path.join('dictionaries', f"MultiExpert_{k}_{experts}_{e}", f"{layer}.pt")
+    ae = MultiExpertAutoEncoder(
+        activation_dim=activation_dim, dict_size=cfg['dict_size'],
+        k=k, experts=experts, e=e, heaviside=heaviside
+    )
+    if os.path.exists(alt_ckpt):
+        state = t.load(alt_ckpt, map_location='cpu')
+        ae.load_state_dict(state)
+    else:
+        raise FileNotFoundError(f"Checkpoint not found at {ckpt_path} or {alt_ckpt}")
+    ae.to(device)
+    return ae
+
+
+def load_topk_or_fallback(cfg: Dict[str, Any], device: str) -> AutoEncoderTopK:
+    k = cfg['k']
+    dir_path = os.path.join('dictionaries', cfg_filename(cfg))
+    ckpt_path = os.path.join(dir_path, 'ae.pt')
+    if os.path.exists(ckpt_path):
+        return AutoEncoderTopK.from_pretrained(ckpt_path, k=k, device=device)
+    # Try a few common manual checkpoint patterns
+    candidates = []
+    dr = cfg.get('dict_ratio', None)
+    if dr is not None:
+        candidates.append(os.path.join('dictionaries', f"topk_{k}_{dr}", f"{layer}.pt"))
+    # based on dict size multiple of activation_dim
+    try:
+        dr_guess = cfg['dict_size'] // activation_dim
+        candidates.append(os.path.join('dictionaries', f"topk_{k}_{dr_guess}", f"{layer}.pt"))
+    except Exception:
+        pass
+    for alt in candidates:
+        if os.path.exists(alt):
+            ae = AutoEncoderTopK(activation_dim=activation_dim, dict_size=cfg['dict_size'], k=k)
+            ae.load_state_dict(t.load(alt, map_location='cpu'))
+            ae.to(device)
+            return ae
+    raise FileNotFoundError(f"Checkpoint not found at {ckpt_path} or any of: {candidates}")
+
+
+def load_gated_or_fallback(cfg: Dict[str, Any], device: str) -> GatedAutoEncoder:
+    dir_path = os.path.join('dictionaries', cfg_filename(cfg))
+    ckpt_path = os.path.join(dir_path, 'ae.pt')
+    if os.path.exists(ckpt_path):
+        return GatedAutoEncoder.from_pretrained(ckpt_path, device=device)
+    # Try a couple of fallback patterns
+    candidates = []
+    dr = cfg.get('dict_ratio', None)
+    lr_label = cfg.get('lr', None)
+    # First try LR-specific folder observed in this repo: dictionaries/gated_{ratio}_{lr}/{layer}.pt
+    if dr is not None and lr_label is not None:
+        candidates.append(os.path.join('dictionaries', f"gated_{dr}_{lr_label}", f"{layer}.pt"))
+    if dr is not None:
+        candidates.append(os.path.join('dictionaries', f"gated_{dr}_{layer}", f"{layer}.pt"))
+    try:
+        dr_guess = cfg['dict_size'] // activation_dim
+        if lr_label is not None:
+            candidates.append(os.path.join('dictionaries', f"gated_{dr_guess}_{lr_label}", f"{layer}.pt"))
+        candidates.append(os.path.join('dictionaries', f"gated_{dr_guess}_{layer}", f"{layer}.pt"))
+    except Exception:
+        pass
+    for alt in candidates:
+        if os.path.exists(alt):
+            ae = GatedAutoEncoder(activation_dim=activation_dim, dict_size=cfg['dict_size'], device=device)
+            ae.load_state_dict(t.load(alt, map_location='cpu'))
+            ae.to(device)
+            return ae
+    raise FileNotFoundError(f"Checkpoint not found at {ckpt_path} or any of: {candidates}")
+
+
 def qa_parquet_text_iter(parquet_path: str, fields=("question", "rationale")) -> Iterable[str]:
     pf = pq.ParquetFile(parquet_path)
     for batch in pf.iter_batches(batch_size=1024):
@@ -313,10 +396,19 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--gpu", required=True)
     parser.add_argument('--dict_ratio', type=int, default=32)
-    parser.add_argument("--ks", nargs="+", type=int, required=True)
-    parser.add_argument("--num_experts", nargs="+", type=int, required=True)
-    parser.add_argument("--es", nargs="+", type=int, required=True)
-    parser.add_argument("--heavisides", nargs="+", type=str2bool, required=True)
+    # ks is only required for moe/moe_scale/topk; make optional and validate per-type
+    parser.add_argument("--ks", nargs="+", type=int, required=False)
+    parser.add_argument("--num_experts", nargs="+", type=int, required=False)
+    parser.add_argument("--es", nargs="+", type=int, required=False)
+    parser.add_argument("--heavisides", nargs="+", type=str2bool, required=False)
+    parser.add_argument("--model_types", nargs="+", type=str, default=["moe_scale"],
+                        help="Which models to evaluate: moe_scale, moe, topk, gated")
+    parser.add_argument("--topk_dict_ratio", type=int, default=1, help="dict_ratio for TopK (default 1 -> 768)")
+    # If omitted, gated falls back to --dict_ratio
+    parser.add_argument("--gated_dict_ratio", type=int, default=None, help="dict_ratio for Gated (overrides --dict_ratio if set)")
+    # Gated model variants identified by learning-rate labels in folder names, e.g., gated_32_10
+    parser.add_argument("--learning_rates", "--lrs", nargs="+", type=int, default=None,
+                        help="LR labels for gated models (e.g., 3 6 10 30 50 100)")
     parser.add_argument("--dataset_name", type=str, default="wikitext")
     parser.add_argument("--dataset_config", type=str, default="wikitext-103-raw-v1")
     parser.add_argument("--split", type=str, default="test")
@@ -351,41 +443,91 @@ def main():
     text_iter = qa_parquet_text_stream(qa_path, fields=("question", "rationale"))
     text_batch_iter = batchify(text_iter, batch_size=args.batch_size)
 
-    base_cfg = {
-        'dict_class': MultiExpertScaleAutoEncoder,
-        'activation_dim': activation_dim,
-        'dict_size': args.dict_ratio * activation_dim,
-        'device': device,
-        'layer': layer,
-        'lm_name': lm,
-    }
-
-    combos = itertools.product(args.ks, args.num_experts, args.es, args.heavisides)
-    trainer_configs = [
-        (base_cfg | {'k': k, 'experts': ex, 'e': e, 'heaviside': h})
-        for (k, ex, e, h) in combos
-    ]
-
     print("Evaluating MSE on new dataset...", flush=True)
     with open("metrics_log.jsonl", "a", encoding='utf-8') as f:
-        for i, cfg in enumerate(trainer_configs):
-            try:
-                ae = load_scale_ae_or_fallback(cfg, device=device)
-                metrics = compute_mse_dataset(
-                    ae,
-                    model,
-                    submodule,
-                    text_batch_iter,
-                    device=device,
-                    eval_batches=args.eval_batches,
-                    ctx_len=args.ctx_len,
-                )
-            except Exception as e:
-                metrics = {'error': str(e)}
-            safe_cfg = {k: (str(v) if callable(v) or isinstance(v, type) else v) for k, v in cfg.items()}
-            record = {"trainer_config": safe_cfg, "metrics": metrics}
-            f.write(json.dumps(record, ensure_ascii=False, default=str) + "\n")
-            print(record)
+        for model_type in args.model_types:
+            if model_type == 'moe_scale':
+                base_cfg = {
+                    'model_type': 'moe_scale',
+                    'dict_class': MultiExpertScaleAutoEncoder,
+                    'activation_dim': activation_dim,
+                    'dict_size': args.dict_ratio * activation_dim,
+                    'device': device,
+                    'layer': layer,
+                    'lm_name': lm,
+                }
+                if args.ks is None:
+                    raise ValueError("--ks is required for model_type 'moe_scale'")
+                combos = itertools.product(args.ks, args.num_experts, args.es, args.heavisides)
+                trainer_configs = [base_cfg | {'k': k, 'experts': ex, 'e': e, 'heaviside': h} for (k, ex, e, h) in combos]
+                loader = load_scale_ae_or_fallback
+            elif model_type == 'moe':
+                base_cfg = {
+                    'model_type': 'moe',
+                    'dict_class': MultiExpertAutoEncoder,
+                    'activation_dim': activation_dim,
+                    'dict_size': args.dict_ratio * activation_dim,
+                    'device': device,
+                    'layer': layer,
+                    'lm_name': lm,
+                }
+                if args.ks is None:
+                    raise ValueError("--ks is required for model_type 'moe'")
+                combos = itertools.product(args.ks, args.num_experts, args.es, args.heavisides)
+                trainer_configs = [base_cfg | {'k': k, 'experts': ex, 'e': e, 'heaviside': h} for (k, ex, e, h) in combos]
+                loader = load_moe_or_fallback
+            elif model_type == 'topk':
+                base_cfg = {
+                    'model_type': 'topk',
+                    'dict_class': AutoEncoderTopK,
+                    'activation_dim': activation_dim,
+                    'dict_size': args.topk_dict_ratio * activation_dim,
+                    'dict_ratio': args.topk_dict_ratio,
+                    'device': device,
+                    'layer': layer,
+                    'lm_name': lm,
+                }
+                if args.ks is None:
+                    raise ValueError("--ks is required for model_type 'topk'")
+                trainer_configs = [base_cfg | {'k': k} for k in args.ks]
+                loader = load_topk_or_fallback
+            elif model_type == 'gated':
+                ratio = args.gated_dict_ratio if args.gated_dict_ratio is not None else args.dict_ratio
+                base_cfg = {
+                    'model_type': 'gated',
+                    'dict_class': GatedAutoEncoder,
+                    'activation_dim': activation_dim,
+                    'dict_size': ratio * activation_dim,
+                    'dict_ratio': ratio,
+                    'device': device,
+                    'layer': layer,
+                    'lm_name': lm,
+                }
+                lrs = args.learning_rates if args.learning_rates is not None else [None]
+                trainer_configs = [base_cfg | ({'lr': lr} if lr is not None else {}) for lr in lrs]
+                loader = load_gated_or_fallback
+            else:
+                print(f"[warn] Unknown model_type '{model_type}', skipping.")
+                continue
+
+            for i, cfg in enumerate(trainer_configs):
+                try:
+                    ae = loader(cfg, device=device)
+                    metrics = compute_mse_dataset(
+                        ae,
+                        model,
+                        submodule,
+                        text_batch_iter,
+                        device=device,
+                        eval_batches=args.eval_batches,
+                        ctx_len=args.ctx_len,
+                    )
+                except Exception as e:
+                    metrics = {'error': str(e)}
+                safe_cfg = {k: (str(v) if callable(v) or isinstance(v, type) else v) for k, v in cfg.items()}
+                record = {"trainer_config": safe_cfg, "metrics": metrics}
+                f.write(json.dumps(record, ensure_ascii=False, default=str) + "\n")
+                print(record)
 
 
 if __name__ == "__main__":
