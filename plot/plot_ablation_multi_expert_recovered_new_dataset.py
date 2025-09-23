@@ -5,11 +5,11 @@ import numpy as np
 k_values = [2, 4, 8, 16, 32, 64, 128]
 
 expert_data = {
-    1: [0.849060953, 0.895408571, 0.929964423, 0.946586311, 0.957092762, 0.968319893, 0.978588164],
-    2: [0.880139172, 0.911716878, 0.935240328, 0.968944073, 0.972381473, 0.981268644, 0.991143823],
-    4: [0.876437843, 0.911037385, 0.941088855, 0.962358356, 0.9787696, 0.98140949, 0.991612911],
-    8: [0.869656086, 0.90976423, 0.940447927, 0.962647676, 0.975598931, 0.984841764, 0.990192473],
-    16: [0.858631551, 0.889445186, 0.92530781, 0.956105411, 0.972185969, 0.982759476, 0.989533544],
+    1: [0.75, 0.803, 0.849, 0.877, 0.899, 0.921, 0.949],
+    2: [0.774, 0.824, 0.855, 0.909, 0.925, 0.952, 0.968],
+    4: [0.782, 0.823, 0.855, 0.902, 0.938, 0.958, 0.974],
+    8: [0.77, 0.828, 0.867, 0.903, 0.944, 0.962, 0.976],
+    16: [0.773, 0.803, 0.861, 0.902, 0.933, 0.959, 0.973],
 }
 
 markers = ['o', 's', '^', 'D', 'v']
@@ -24,7 +24,6 @@ plt.rcParams.update({
 
 plt.figure(figsize=(10, 8))
 
-# 4. 绘制每一条 expert 曲线
 for i, (expert_count, frac_recovered_values) in enumerate(expert_data.items()):
     plt.plot(
         k_values,
@@ -48,5 +47,5 @@ ax.xaxis.set_minor_locator(mticker.NullLocator())
 
 plt.grid(True, alpha=0.3, linestyle='--', linewidth=0.8)
 
-plt.savefig('ablation_multi_expert_recovered.png', dpi=300, bbox_inches='tight')
-print('Saved ablation_multi_expert_recovered.png')
+plt.savefig('ablation_multi_expert_recovered_new_dataset.png', dpi=300, bbox_inches='tight')
+print('Saved ablation_multi_expert_recovered_new_dataset.png')

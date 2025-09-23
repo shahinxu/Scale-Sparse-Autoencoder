@@ -1,15 +1,15 @@
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
+import numpy as np
 
 markers = ['o', 's', '^', 'D', 'v', '*']
 colors = ['#264653', '#2a9d8f', '#e9c46a', '#f4a261', '#e76f51', '#0f4c5c']
 
 plt.rcParams.update({
-    'font.size': 28,
-    'axes.labelsize': 28,
-    'xtick.labelsize': 28,
-    'ytick.labelsize': 28,
-    'legend.fontsize': 24,
+    'font.size': 38,
+    'axes.labelsize': 38,
+    'xtick.labelsize': 38,
+    'ytick.labelsize': 38,
 })
 
 k_values = [2, 4, 8, 16, 32, 64, 128]
@@ -25,20 +25,19 @@ data = {
 gated_k = [2.046143, 2.858521, 7.129517, 12.41503906, 33.4967041, 82.11975098, 217.4451904]
 gated_mse = [8317.752441, 7208.431885, 5616.853271, 4809.932129, 3869.896484, 3070.947266, 2220.185181]
 
-# Add Gated SAE to the plotting sequence (distinct marker/color)
 data['Gated SAE'] = gated_mse
 data_kmap = { 'Gated SAE': gated_k }
 
-plt.figure(figsize=(12, 8))
+plt.figure(figsize=(10, 8))
 
 for i, (model, mse_values) in enumerate(data.items()):
-    # decide x-coordinates: some models use the global k_values, others have explicit k arrays
     x = data_kmap.get(model, k_values)
+    y = mse_values
     clr = colors[i % len(colors)]
     mkr = markers[i % len(markers)]
-    plt.plot(
+    plt.plot(    
         x,
-        mse_values,
+        y,
         marker=mkr,
         linestyle='-',
         linewidth=3,
@@ -58,41 +57,12 @@ ax.xaxis.set_major_formatter(mticker.LogFormatterMathtext(base=10.0))
 ax.xaxis.set_minor_locator(mticker.NullLocator())
 
 ax.set_yscale('log', base=10)
-from math import log10, floor, ceil
-
-# Build fixed major ticks at 2×, 4×, 8× per decade within current y-limits
-ymin, ymax = ax.get_ylim()
-if ymin <= 0:
-    ymin = 1e-6  # safety for log scale
-emin = floor(log10(ymin))
-emax = ceil(log10(ymax))
-
-tick_vals = []
-for e in range(emin - 1, emax + 2):
-    for m in (2, 4, 8):
-        v = m * (10 ** e)
-        if ymin <= v <= ymax:
-            tick_vals.append(v)
-
-if tick_vals:
-    ax.yaxis.set_major_locator(mticker.FixedLocator(tick_vals))
-else:
-    # Fallback to a reasonable default in the 10^3 range
-    ax.yaxis.set_major_locator(mticker.FixedLocator([2e3, 4e3, 8e3]))
-
-def _fmt_times_pow(y, pos=None):
-    if y <= 0:
-        return ""
-    e = int(floor(log10(y)))
-    a = y / (10 ** e)
-    # Snap to nearest integer to avoid floating point artifacts (expects 2,4,8)
-    a_int = int(round(a))
-    return f"${a_int}\\times10^{{{e}}}$"
-
-ax.yaxis.set_major_formatter(mticker.FuncFormatter(_fmt_times_pow))
+ax.yaxis.set_major_locator(mticker.LogLocator(base=10.0, subs=(1.0,)))
+ax.yaxis.set_major_formatter(mticker.LogFormatterMathtext(base=10.0, labelOnlyBase=True))
 ax.yaxis.set_minor_locator(mticker.NullLocator())
+ax.set_ylim(top=1e4)
 
-plt.legend(loc='upper right', frameon=True)
+# plt.legend(loc='lower left', frameon=True)
 
 plt.grid(True, alpha=0.3, linestyle='--', linewidth=0.8)
 
