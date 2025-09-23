@@ -5,11 +5,10 @@ markers = ['o', 's', '^', 'D', 'v', '*']
 colors = ['#264653', '#2a9d8f', '#e9c46a', '#f4a261', '#e76f51', '#0f4c5c']
 
 plt.rcParams.update({
-    'font.size': 28,
-    'axes.labelsize': 28,
-    'xtick.labelsize': 28,
-    'ytick.labelsize': 28,
-    'legend.fontsize': 24,
+    'font.size': 38,
+    'axes.labelsize': 38,
+    'xtick.labelsize': 38,
+    'ytick.labelsize': 38,
 })
 
 k_values = [2, 4, 8, 16, 32, 64, 128]
@@ -25,14 +24,12 @@ data = {
 gated_k = [2.046143, 2.858521, 7.129517, 12.41503906, 33.4967041, 82.11975098, 217.4451904]
 gated_recovered = [0.646245956, 0.739900529, 0.828819364, 0.882518023, 0.930768758, 0.956792921, 0.972725451]
 
-# Add Gated SAE to the plotting sequence (distinct marker/color)
 data['Gated SAE'] = gated_recovered
 data_kmap = { 'Gated SAE': gated_k }
 
-plt.figure(figsize=(12, 8))
+plt.figure(figsize=(10, 8))
 
 for i, (model, mse_values) in enumerate(data.items()):
-    # decide x-coordinates: some models use the global k_values, others have explicit k arrays
     x = data_kmap.get(model, k_values)
     clr = colors[i % len(colors)]
     mkr = markers[i % len(markers)]
@@ -57,8 +54,9 @@ ax.xaxis.set_major_locator(mticker.LogLocator(base=10.0))
 ax.xaxis.set_major_formatter(mticker.LogFormatterMathtext(base=10.0))
 ax.xaxis.set_minor_locator(mticker.NullLocator())
 
+plt.ylim(0.6, 1.0)
 
-plt.legend(loc='lower right', frameon=True)
+# plt.legend(loc='lower right', frameon=True)
 
 plt.grid(True, alpha=0.3, linestyle='--', linewidth=0.8)
 

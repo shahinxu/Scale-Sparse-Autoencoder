@@ -5,12 +5,12 @@ markers = ['o', 's', '^', 'D', 'v', '*']  # Circle, Square, Up Triangle, Diamond
 colors = ['#264653', '#2a9d8f', '#e9c46a', '#f4a261', '#e76f51', '#0f4c5c']  # Added a sixth color for the sixth marker
 
 plt.rcParams.update({
-    'font.size': 28,
-    'axes.labelsize': 28,
-    'xtick.labelsize': 28,
-    'ytick.labelsize': 28,
-    'legend.fontsize': 24,
+    'font.size': 38,
+    'axes.labelsize': 38,
+    'xtick.labelsize': 38,
+    'ytick.labelsize': 38,
 })
+
 
 k_values = [2, 4, 8, 16, 32, 64, 128]
 
@@ -30,7 +30,7 @@ gated_mse = [7799.085938, 5966.50293, 4370.03418, 3585.277832, 2843.496094, 2202
 data['Gated SAE'] = gated_mse
 data_kmap = { 'Gated SAE': gated_k }
 
-plt.figure(figsize=(12, 8))
+plt.figure(figsize=(10, 8))
 
 for i, (model, mse_values) in enumerate(data.items()):
     # decide x-coordinates: some models use the global k_values, others have explicit k arrays
@@ -62,10 +62,11 @@ ax.set_yscale('log', base=10)
 ax.yaxis.set_major_locator(mticker.LogLocator(base=10.0))
 ax.yaxis.set_major_formatter(mticker.LogFormatterMathtext(base=10.0))
 ax.yaxis.set_minor_locator(mticker.NullLocator())
+ax.set_ylim(top=1e4)
 
-plt.legend(loc='upper right', frameon=True)
+# plt.legend(loc='upper right', frameon=True)
 
 plt.grid(True, alpha=0.3, linestyle='--', linewidth=0.8)
 
-plt.savefig('result_sae.png', dpi=300, bbox_inches='tight')
-print('Saved result_sae.png')
+plt.savefig('result_mse.png', dpi=300, bbox_inches='tight')
+print('Saved result_mse.png')

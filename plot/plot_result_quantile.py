@@ -5,12 +5,12 @@ markers = ['o', 's', '^', 'D', 'v', '*']
 colors = ['#264653', '#2a9d8f', '#e9c46a', '#0f4c5c', '#e76f51', '#f4a261']
 
 plt.rcParams.update({
-    'font.size': 28,
-    'axes.labelsize': 28,
-    'xtick.labelsize': 28,
-    'ytick.labelsize': 28,
-    'legend.fontsize': 24,
+    'font.size': 38,
+    'axes.labelsize': 38,
+    'xtick.labelsize': 38,
+    'ytick.labelsize': 38,
 })
+
 
 quantile_labels = ['not'] + [str(i) for i in np.arange(1, 11)]
 
@@ -25,7 +25,7 @@ data = {
 
 x_indices = np.arange(len(quantile_labels))
 
-plt.figure(figsize=(12, 8))
+plt.figure(figsize=(10, 8))
 
 for i, (model, values) in enumerate(data.items()):
     plt.plot(
@@ -43,7 +43,7 @@ plt.xlabel('Quantile')
 plt.ylabel('Accuracy')
 plt.xticks(x_indices, labels=quantile_labels)
 plt.ylim(0.2, 1.0)
-plt.legend(loc='upper center')
+# plt.legend(loc='upper center')
 plt.grid(True, alpha=0.3, linestyle='--', linewidth=0.8)
 
 plt.savefig('result_quantiles.png', dpi=300, bbox_inches='tight')

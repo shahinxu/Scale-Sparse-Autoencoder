@@ -1,6 +1,6 @@
 python test_with_new_dataset.py \
   --gpu 5 \
-  --model_types moe \
+  --model_types moe_scale \
   --dict_ratio 32 \
   --ks 2 4 8 16 32 64 128 \
   --num_experts 64 \
