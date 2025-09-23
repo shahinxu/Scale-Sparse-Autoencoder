@@ -1,0 +1,11 @@
+python test_with_new_dataset.py \
+  --gpu 5 \
+  --model_types moe \
+  --dict_ratio 32 \
+  --ks 2 4 8 16 32 64 128 \
+  --num_experts 64 \
+  --es 1 2 4 8 16 \
+  --heavisides false \
+  --ctx_len 128 \
+  --batch_size 64 \
+  --eval_batches 2
