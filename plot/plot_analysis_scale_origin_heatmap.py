@@ -46,7 +46,7 @@ ax.set_xticklabels(k_values)
 ax.set_yticklabels(experts)
 
 ax.set_xlabel('Sparsity (L0)')
-ax.set_ylabel('# Activated Experts')
+ax.set_ylabel('# Activated Experts (e)')
 
 cbar = ax.figure.colorbar(im, ax=ax, shrink=0.8, aspect=20)
 

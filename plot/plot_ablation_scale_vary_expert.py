@@ -78,37 +78,61 @@ fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 8), sharex=True, gridspec_kw={
 rects1 = ax1.bar(x - width/2, [no_scale_data_2[k] for k in k_values], width, label='Plain', color='#264653', hatch='///')
 rects2 = ax1.bar(x + width/2, [with_scale_data_2[k] for k in k_values], width, label='Scale', color='#2a9d8f', hatch='\\\\')
 ax1_twin = ax1.twinx()
-rects3 = ax1_twin.bar(x - width/2, [no_scale_loss_recovered_2[k] for k in k_values], width, color='#264653', hatch='///')
-rects4 = ax1_twin.bar(x + width/2, [with_scale_loss_recovered_2[k] for k in k_values], width, color='#2a9d8f', hatch='\\\\')
+# Loss Recovered as line plots (bright colors)
+ax1_twin.plot(
+    x,
+    [no_scale_loss_recovered_2[k] for k in k_values],
+    marker='o', linestyle='-', linewidth=2.5, markersize=8,
+    color='#ff7f0e', label='Plain (Recovered)', zorder=3
+)
+ax1_twin.plot(
+    x,
+    [with_scale_loss_recovered_2[k] for k in k_values],
+    marker='^', linestyle='-', linewidth=2.5, markersize=8,
+    color='#e31a1c', label='Scale (Recovered)', zorder=3
+)
 ax1.set_ylabel('MSE')
 ax1_twin.set_ylabel('Loss Recovered')
-ax1_twin.invert_yaxis()
 ax1.set_title('L0=2', size=28)
 ax1.grid(axis='y', alpha=0.3, linestyle='--', linewidth=0.8)
 ax1.set_ylim(3800, 6000)
-ax1_twin.set_ylim(1.0, 0.84)
-ax1_twin.set_yticks(np.linspace(1, 0.84, 3))
+ax1_twin.set_ylim(0.84, 1.0)
+ax1_twin.set_yticks(np.linspace(0.84, 1.0, 3))
 ax1.legend(loc='lower left', frameon=True)
 
 # L0=32
 rects5 = ax2.bar(x - width/2, [no_scale_data_32[k] for k in k_values], width, label='Plain', color='#264653', hatch='///')
 rects6 = ax2.bar(x + width/2, [with_scale_data_32[k] for k in k_values], width, label='Scale', color='#2a9d8f', hatch='\\\\')
 ax2_twin = ax2.twinx()
-rects7 = ax2_twin.bar(x - width/2, [no_scale_loss_recovered_32[k] for k in k_values], width, color='#264653', hatch='///')
-rects8 = ax2_twin.bar(x + width/2, [with_scale_loss_recovered_32[k] for k in k_values], width, color='#2a9d8f', hatch='\\\\')
+# Loss Recovered as line plots (bright colors)
+ax2_twin.plot(
+    x,
+    [no_scale_loss_recovered_32[k] for k in k_values],
+    marker='o', linestyle='-', linewidth=2.5, markersize=8,
+    color='#ff7f0e', label='Plain (Recovered)', zorder=3
+)
+ax2_twin.plot(
+    x,
+    [with_scale_loss_recovered_32[k] for k in k_values],
+    marker='^', linestyle='-', linewidth=2.5, markersize=8,
+    color='#e31a1c', label='Scale (Recovered)', zorder=3
+)
 ax2.set_ylabel('MSE')
 ax2_twin.set_ylabel('Loss Recovered')
-ax2_twin.invert_yaxis()
 ax2.set_title('L0=32', size=28)
 ax2.grid(axis='y', alpha=0.3, linestyle='--', linewidth=0.8)
 ax2.set_ylim(1200, 3000)
-ax2_twin.set_ylim(1.0, 0.95)
-ax2_twin.set_yticks(np.linspace(1, 0.95, 3))
+ax2_twin.set_ylim(0.95, 1.0)
+ax2_twin.set_yticks(np.linspace(0.95, 1.0, 3))
 
 # 只在最下面的图显示横坐标和标签
 ax2.set_xlabel('Sparsity (L0)')
 ax2.set_xticks(x)
 ax2.set_xticklabels([str(k) for k in k_values])
+
+# Show legends for line plots on twin axes
+ax1_twin.legend(loc='upper right', frameon=True)
+ax2_twin.legend(loc='upper right', frameon=True)
 
 plt.tight_layout()
 plt.savefig('ablation_scale_vary_expert.png', dpi=300, bbox_inches='tight')

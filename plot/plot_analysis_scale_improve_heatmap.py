@@ -87,7 +87,7 @@ ax.set_yticks(np.arange(len(experts)))
 ax.set_yticklabels(experts)
 
 ax.set_xlabel('Sparsity (L0)')
-ax.set_ylabel('# Activated Experts')
+ax.set_ylabel('# Activated Experts (e)')
 
 from matplotlib.ticker import FuncFormatter
 

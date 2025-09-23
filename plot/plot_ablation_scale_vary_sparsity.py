@@ -33,34 +33,34 @@ fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 8), sharex=True, gridspec_kw={
 rects1 = ax1.bar(x - width/2, no_scale_mse_8, width, label='Plain', color='#264653', hatch='///')
 rects2 = ax1.bar(x + width/2, with_scale_mse_8, width, label='Scale', color='#2a9d8f', hatch='\\\\')
 ax1_twin = ax1.twinx()
-rects3 = ax1_twin.bar(x - width/2, no_scale_recovered_8, width, label='Plain', color='#264653', hatch='///')
-rects4 = ax1_twin.bar(x + width/2, with_scale_recovered_8, width, label='Scale', color='#2a9d8f', hatch='\\\\')
+# Loss Recovered: line plots on twin axis
+ax1_twin.plot(x, no_scale_recovered_8, marker='o', linestyle='-', linewidth=2.5, markersize=8,
+              color='#ff7f0e', label='Plain (Recovered)', zorder=3)
+ax1_twin.plot(x, with_scale_recovered_8, marker='^', linestyle='-', linewidth=2.5, markersize=8,
+              color='#e31a1c', label='Scale (Recovered)', zorder=3)
 ax1.set_ylabel('MSE')
 ax1_twin.set_ylabel('Loss Recovered')
-ax1_twin.invert_yaxis()
-ax1.set_title('# activated experts = 8', size=28)
+ax1.set_title('e = 8', size=28)
 ax1.grid(axis='y', alpha=0.3, linestyle='--', linewidth=0.8)
-ax1.set_ylim(800, 8800)
-ax1_twin.set_ylim(1.0, 0.85)
-ax1_twin.set_yticks(np.linspace(1, 0.85, 4))
+ax1.set_ylim(800, 6000)
+ax1_twin.set_ylim(0.85, 1.0)
+ax1_twin.set_yticks(np.linspace(0.85, 1.0, 4))
 
-ax1_twin.legend(loc='upper right', frameon=True)
-# expert=16
 rects5 = ax2.bar(x - width/2, no_scale_mse_16, width, label='Plain', color='#264653', hatch='///')
 rects6 = ax2.bar(x + width/2, with_scale_mse_16, width, label='Scale', color='#2a9d8f', hatch='\\\\')
 ax2_twin = ax2.twinx()
-rects7 = ax2_twin.bar(x - width/2, no_scale_recovered_16, width, color='#264653', hatch='///')
-rects8 = ax2_twin.bar(x + width/2, with_scale_recovered_16, width, color='#2a9d8f', hatch='\\\\')
+ax2_twin.plot(x, no_scale_recovered_16, marker='o', linestyle='-', linewidth=2.5, markersize=8,
+              color='#ff7f0e', label='Plain (Recovered)', zorder=3)
+ax2_twin.plot(x, with_scale_recovered_16, marker='^', linestyle='-', linewidth=2.5, markersize=8,
+              color='#e31a1c', label='Scale (Recovered)', zorder=3)
 ax2.set_ylabel('MSE')
 ax2_twin.set_ylabel('Loss Recovered')
-ax2_twin.invert_yaxis()
-ax2.set_title('# activated experts = 16', size=28)
+ax2.set_title('e = 16', size=28)
 ax2.grid(axis='y', alpha=0.3, linestyle='--', linewidth=0.8)
-ax2.set_ylim(800, 10800)
-ax2_twin.set_ylim(1.0, 0.85)
-ax2_twin.set_yticks(np.linspace(1, 0.85, 4))
+ax2.set_ylim(800, 6000)
+ax2_twin.set_ylim(0.85, 1.0)
+ax2_twin.set_yticks(np.linspace(0.85, 1.0, 4))
 
-# 只在最下面的图显示横坐标和标签
 ax2.set_xlabel('Sparsity (L0)')
 ax2.set_xticks(x)
 ax2.set_xticklabels([str(k) for k in k_values])
