@@ -15,7 +15,7 @@ plt.rcParams.update({
     'axes.labelsize': 28,
     'xtick.labelsize': 28,
     'ytick.labelsize': 28,
-    'legend.fontsize': 26,
+    'legend.fontsize': 24,
 })
 
 
@@ -616,7 +616,7 @@ def main():
     xD4_32, cD_32 = get_cdf_full(dD_32)
     xE4_32, cE_32 = get_cdf_full(dE_32)
 
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 8))
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 6))
 
     # 第一张图：L0=16
     ax1.step(xA4_16, cA_16, where='pre', color='#264653', label=f"act={E_1}", linewidth=3)

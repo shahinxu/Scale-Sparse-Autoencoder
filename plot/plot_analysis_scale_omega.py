@@ -4,11 +4,11 @@ import numpy as np
 
 # 设置matplotlib参数
 plt.rcParams.update({
-    'font.size': 16,
-    'axes.labelsize': 16,
-    'xtick.labelsize': 16,
-    'ytick.labelsize': 16,
-    'legend.fontsize': 16,
+    'font.size': 28,
+    'axes.labelsize': 28,
+    'xtick.labelsize': 28,
+    'ytick.labelsize': 28,
+    'legend.fontsize': 24,
 })
 
 def plot_scaling_factors():
@@ -28,7 +28,7 @@ def plot_scaling_factors():
     colors = ['#264653', '#2a9d8f', '#e9c46a', '#f4a261', '#e76f51']
     markers = ['o', 's', '^', 'D', 'v',]
     
-    plt.figure(figsize=(12, 4))
+    plt.figure(figsize=(12, 8))
     
     for i, k in enumerate(k_values):
         plt.plot(e_values, scaling_data[k], 

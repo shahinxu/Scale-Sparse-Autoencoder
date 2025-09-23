@@ -26,13 +26,13 @@ plt.rcParams.update({
     'legend.fontsize': 24,
 })
 
-fig, ax = plt.subplots(figsize=(12, 8))
+fig, ax = plt.subplots(figsize=(12, 6))
 
 colors = ['#264653', '#2a9d8f']
 n_bins = 100
 custom_cmap = LinearSegmentedColormap.from_list('custom', colors, N=n_bins)
 
-im = ax.imshow(heatmap_data, cmap=custom_cmap)
+im = ax.imshow(heatmap_data, cmap=custom_cmap, aspect='auto')
 
 for i in range(len(experts)):
     for j in range(len(k_values)):

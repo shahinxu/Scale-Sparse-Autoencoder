@@ -55,7 +55,7 @@ plt.rcParams.update({
     'legend.fontsize': 24,
 })
 
-fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 8))
+fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 6))
 
 x = np.arange(len(experts_16))
 width = 0.4

@@ -115,7 +115,7 @@ def main():
 
     x = np.arange(len(activations))
     width = 0.4
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 8))
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 6))
 
     # 第一张图：MultiExpert_16_64_{activation}
     ax1.bar(x - width/2, in_max_ratio_list_16, width, label='in-expert', color='#264653', hatch='///')

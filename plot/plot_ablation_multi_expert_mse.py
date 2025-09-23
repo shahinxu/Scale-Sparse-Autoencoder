@@ -22,7 +22,7 @@ plt.rcParams.update({
     'legend.fontsize': 26,
 })
 
-plt.figure(figsize=(12, 8))
+plt.figure(figsize=(12, 6))
 
 for i, (expert_count, mse_values) in enumerate(expert_data.items()):
     plt.plot(
@@ -33,7 +33,7 @@ for i, (expert_count, mse_values) in enumerate(expert_data.items()):
         linewidth=3,
         color=colors[i],
         markersize=12,
-        label=f'{expert_count} experts'
+        label=f'act={expert_count}'
     )
 
 plt.xlabel('Sparsity (L0)')

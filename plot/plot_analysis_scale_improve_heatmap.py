@@ -27,7 +27,7 @@ plt.rcParams.update({
     'legend.fontsize': 24,
 })
 
-fig, ax = plt.subplots(figsize=(12, 8))
+fig, ax = plt.subplots(figsize=(12, 6))
 
 NEG_START = os.environ.get('NEG_START', '#e9c46a')  # 负侧起色（靠近零）
 NEG_END = os.environ.get('NEG_END', '#e76f51')      # 负侧终色（更负）
@@ -72,7 +72,7 @@ for ii in range(heatmap_data.shape[0]):
         mapped[ii, jj] = t
 
 mapped_masked = np.ma.masked_invalid(mapped)
-im = ax.imshow(mapped_masked, cmap=custom_cmap, vmin=0.0, vmax=1.0)
+im = ax.imshow(mapped_masked, cmap=custom_cmap, vmin=0.0, vmax=1.0, aspect='auto')
 im.cmap.set_bad(color='white')
 
 for i in range(len(experts)):

@@ -27,7 +27,7 @@ plt.rcParams.update({
 })
 
 # 3. 创建图表（统一尺寸）
-plt.figure(figsize=(12, 8))
+plt.figure(figsize=(12, 6))
 
 # 4. 绘制每一条 expert 曲线
 for i, (expert_count, frac_recovered_values) in enumerate(expert_data.items()):
@@ -39,7 +39,7 @@ for i, (expert_count, frac_recovered_values) in enumerate(expert_data.items()):
         linewidth=3,
         color=colors[i],
         markersize=12,
-        label=f'{expert_count} experts'
+        label=f'act={expert_count}'
     )
 
 plt.xlabel('Sparsity (L0)')
