@@ -19,7 +19,7 @@ plt.rcParams.update({
 })
 
 
-GPU = "4"
+GPU = "5"
 EXPERTS = 64
 LAYER = 8
 ACT_DIM = 768
@@ -619,11 +619,11 @@ def main():
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 6))
 
     # 第一张图：L0=16
-    ax1.step(xA4_16, cA_16, where='pre', color='#264653', label=f"act={E_1}", linewidth=3)
-    ax1.step(xB4_16, cB_16, where='pre', color='#2a9d8f', label=f"act={E_2}", linewidth=3)
-    ax1.step(xC4_16, cC_16, where='pre', color='#e9c46a', label=f"act={E_3}", linewidth=3)
-    ax1.step(xD4_16, cD_16, where='pre', color='#f4a261', label=f"act={E_4}", linewidth=3)
-    ax1.step(xE4_16, cE_16, where='pre', color='#e76f51', label=f"act={E_5}", linewidth=3)
+    ax1.step(xA4_16, cA_16, where='pre', color='#264653', label=f"e={E_1}", linewidth=3)
+    ax1.step(xB4_16, cB_16, where='pre', color='#2a9d8f', label=f"e={E_2}", linewidth=3)
+    ax1.step(xC4_16, cC_16, where='pre', color='#e9c46a', label=f"e={E_3}", linewidth=3)
+    ax1.step(xD4_16, cD_16, where='pre', color='#f4a261', label=f"e={E_4}", linewidth=3)
+    ax1.step(xE4_16, cE_16, where='pre', color='#e76f51', label=f"e={E_5}", linewidth=3)
     ax1.set_xlabel('Expert Rank')
     ax1.set_ylabel('CDF')
     ax1.set_ylim(0, 1)

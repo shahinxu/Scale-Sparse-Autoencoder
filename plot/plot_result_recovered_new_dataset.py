@@ -40,7 +40,7 @@ for i, (model, mse_values) in enumerate(data.items()):
         linestyle='-',
         linewidth=3,
         color=clr,
-        markersize=12,
+        markersize=20,
         label=model
     )
 

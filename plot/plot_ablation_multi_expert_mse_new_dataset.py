@@ -29,9 +29,9 @@ for i, (expert_count, mse_values) in enumerate(expert_data.items()):
         mse_values,
         marker=markers[i],
         linestyle='-',
-        linewidth=3,
+        linewidth=4,
         color=colors[i],
-        markersize=12,
+        markersize=20,
         label=f'act={expert_count}'
     )
 

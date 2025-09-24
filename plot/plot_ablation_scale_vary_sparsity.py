@@ -27,43 +27,60 @@ plt.rcParams.update({
 x = np.arange(len(k_values))
 width = 0.4
 
-fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 8), sharex=True, gridspec_kw={'height_ratios': [1, 1]})
+# Horizontal layout
+fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 6), sharex=True)
 
 # expert=8
 rects1 = ax1.bar(x - width/2, no_scale_mse_8, width, label='Plain', color='#264653', hatch='///')
 rects2 = ax1.bar(x + width/2, with_scale_mse_8, width, label='Scale', color='#2a9d8f', hatch='\\\\')
 ax1_twin = ax1.twinx()
 # Loss Recovered: line plots on twin axis
-ax1_twin.plot(x, no_scale_recovered_8, marker='o', linestyle='-', linewidth=2.5, markersize=8,
-              color='#ff7f0e', label='Plain (Recovered)', zorder=3)
-ax1_twin.plot(x, with_scale_recovered_8, marker='^', linestyle='-', linewidth=2.5, markersize=8,
-              color='#e31a1c', label='Scale (Recovered)', zorder=3)
+ax1_twin.plot(x, no_scale_recovered_8, marker='o', linestyle='-', linewidth=2.5, markersize=12,
+              color='#e9c46a', label='Plain (Recovered)', zorder=3)
+ax1_twin.plot(x, with_scale_recovered_8, marker='^', linestyle='-', linewidth=2.5, markersize=12,
+              color='#e76f51', label='Scale (Recovered)', zorder=3)
 ax1.set_ylabel('MSE')
-ax1_twin.set_ylabel('Loss Recovered')
+# ax1_twin.set_ylabel('Loss Recovered')
 ax1.set_title('e = 8', size=28)
 ax1.grid(axis='y', alpha=0.3, linestyle='--', linewidth=0.8)
-ax1.set_ylim(800, 6000)
-ax1_twin.set_ylim(0.85, 1.0)
-ax1_twin.set_yticks(np.linspace(0.85, 1.0, 4))
+ax1.set_xlabel('Sparsity (L0)')
+# Unify axis limits and ticks across panels
+MSE_YMIN, MSE_YMAX = 800, 6000
+REC_YMIN, REC_YMAX = 0.85, 1.0
+MSE_TICKS = np.linspace(MSE_YMIN, MSE_YMAX, 6)
+REC_TICKS = np.linspace(REC_YMIN, REC_YMAX, 4)
+
+ax1.set_ylim(MSE_YMIN, MSE_YMAX)
+ax1.set_yticks(MSE_TICKS)
+ax1_twin.set_ylim(REC_YMIN, REC_YMAX)
+ax1_twin.set_yticks(REC_TICKS)
 
 rects5 = ax2.bar(x - width/2, no_scale_mse_16, width, label='Plain', color='#264653', hatch='///')
 rects6 = ax2.bar(x + width/2, with_scale_mse_16, width, label='Scale', color='#2a9d8f', hatch='\\\\')
 ax2_twin = ax2.twinx()
-ax2_twin.plot(x, no_scale_recovered_16, marker='o', linestyle='-', linewidth=2.5, markersize=8,
-              color='#ff7f0e', label='Plain (Recovered)', zorder=3)
-ax2_twin.plot(x, with_scale_recovered_16, marker='^', linestyle='-', linewidth=2.5, markersize=8,
-              color='#e31a1c', label='Scale (Recovered)', zorder=3)
-ax2.set_ylabel('MSE')
+ax2_twin.plot(x, no_scale_recovered_16, marker='o', linestyle='-', linewidth=2.5, markersize=12,
+              color='#e9c46a', label='Plain (Recovered)', zorder=3)
+ax2_twin.plot(x, with_scale_recovered_16, marker='^', linestyle='-', linewidth=2.5, markersize=12,
+              color='#e76f51', label='Scale (Recovered)', zorder=3)
+# ax2.set_ylabel('MSE')
 ax2_twin.set_ylabel('Loss Recovered')
 ax2.set_title('e = 16', size=28)
 ax2.grid(axis='y', alpha=0.3, linestyle='--', linewidth=0.8)
-ax2.set_ylim(800, 6000)
-ax2_twin.set_ylim(0.85, 1.0)
-ax2_twin.set_yticks(np.linspace(0.85, 1.0, 4))
+ax2.set_ylim(MSE_YMIN, MSE_YMAX)
+ax2.set_yticks(MSE_TICKS)
+ax2_twin.set_ylim(REC_YMIN, REC_YMAX)
+ax2_twin.set_yticks(REC_TICKS)
 
 ax2.set_xlabel('Sparsity (L0)')
 ax2.set_xticks(x)
 ax2.set_xticklabels([str(k) for k in k_values])
+
+# Only show left y-axis (MSE) on first panel, hide on second
+ax2.tick_params(axis='y', which='both', left=False, labelleft=False)
+
+# Only show right y-axis (Recovered) on second panel; hide on first
+ax1_twin.tick_params(axis='y', which='both', right=False, labelright=False)
+ax2_twin.tick_params(axis='y', which='both', right=True, labelright=True)
 
 plt.tight_layout()
 plt.savefig('ablation_scale_vary_sparsity.png', dpi=300, bbox_inches='tight')

@@ -35,7 +35,7 @@ for i, (model, values) in enumerate(data.items()):
         linestyle='-',
         linewidth=3,
         color=colors[i],
-        markersize=12,
+        markersize=20,
         label=model
     )
 

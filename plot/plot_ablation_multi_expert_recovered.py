@@ -33,7 +33,7 @@ for i, (expert_count, frac_recovered_values) in enumerate(expert_data.items()):
         linestyle='-',
         linewidth=3,
         color=colors[i],
-        markersize=12,
+        markersize=20,
         label=f'act={expert_count}'
     )
 
