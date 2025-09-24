@@ -382,6 +382,7 @@ def main():
     top_n_features = 3
     max_tokens_per_category = 2000
     print("Loading LM and tokenizer...")
+    print(device)
     model = LanguageModel(lm, dispatch=True, device_map=device)
     tokenizer = AutoTokenizer.from_pretrained(lm)
 

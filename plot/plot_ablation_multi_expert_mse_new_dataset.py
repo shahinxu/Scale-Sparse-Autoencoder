@@ -15,10 +15,10 @@ markers = ['o', 's', '^', 'D', 'v']
 colors = ['#264653', '#2a9d8f', '#e9c46a', '#f4a261', '#e76f51']
 
 plt.rcParams.update({
-    'font.size': 38,
-    'axes.labelsize': 38,
-    'xtick.labelsize': 38,
-    'ytick.labelsize': 38,
+    'font.size': 42,
+    'axes.labelsize': 42,
+    'xtick.labelsize': 42,
+    'ytick.labelsize': 42,
 })
 
 plt.figure(figsize=(10, 8))
