@@ -390,3 +390,98 @@ class AutoEncoderNew(Dictionary, nn.Module):
         if device is not None:
             autoencoder.to(device)
         return autoencoder
+
+
+class MatryoshkaAutoEncoder(Dictionary, nn.Module):
+    """
+    Matryoshka-style autoencoder.
+
+    Holds a full parameterization for `total_dict_size` features but when
+    encoding/decoding only uses the first `dict_size` features. Mirrors
+    the other dictionary APIs in this file (encode/decode/forward/from_pretrained).
+    """
+    def __init__(self, activation_dim, total_dict_size, dict_size=None, bias=True):
+        super().__init__()
+        self.activation_dim = activation_dim
+        self.total_dict_size = int(total_dict_size)
+        self.dict_size = int(dict_size) if dict_size is not None else int(total_dict_size)
+
+        # encoder produces scores for the full outer dictionary
+        self.encoder = nn.Linear(activation_dim, self.total_dict_size, bias=bias)
+
+        # decoder stores the full outer dictionary as columns; we'll only use
+        # the first `dict_size` columns when decoding
+        self.decoder = nn.Linear(self.total_dict_size, activation_dim, bias=False)
+
+        # initialize decoder columns as unit vectors (consistent with other dicts)
+        dec_weight = t.randn_like(self.decoder.weight)
+        dec_weight = dec_weight / (dec_weight.norm(dim=0, keepdim=True) + 1e-12)
+        self.decoder.weight = nn.Parameter(dec_weight)
+
+    def encode(self, x):
+        """Encode x into the active feature space (size=self.dict_size).
+
+        Returns tensor of shape (B, dict_size).
+        """
+        scores = self.encoder(x)
+        f = nn.ReLU()(scores[:, : self.dict_size])
+        return f
+
+    def decode(self, f):
+        """Decode features f (B, dict_size) using the first dict_size decoder columns."""
+        if f.dim() == 1:
+            f = f.unsqueeze(0)
+        dec_cols = self.decoder.weight[:, : self.dict_size]  # (activation_dim, dict_size)
+        x_hat = t.matmul(f, dec_cols.T)
+        return x_hat
+
+    def forward(self, x, output_features=False):
+        f = self.encode(x)
+        x_hat = self.decode(f)
+        if output_features:
+            # scale features by decoder column norms to match other implementations
+            col_norms = self.decoder.weight[:, : self.dict_size].norm(dim=0, keepdim=True)
+            f_scaled = f * col_norms
+            return x_hat, f_scaled
+        return x_hat
+
+    def from_pretrained(path, device=None, active_dict_size=None):
+        """Load a MatryoshkaAutoEncoder from a state dict saved for a full-size autoencoder.
+
+        The function is robust to a few different state-dict naming conventions used in this repo.
+        """
+        state = t.load(path, map_location='cpu')
+        # try several possible keys to infer shapes
+        if 'encoder.weight' in state:
+            total_dict_size, activation_dim = state['encoder.weight'].shape
+        elif 'W_enc' in state:
+            total_dict_size, activation_dim = state['W_enc'].shape
+        elif 'decoder.weight' in state:
+            try:
+                activation_dim, total_dict_size = state['decoder.weight'].shape
+            except Exception:
+                raise RuntimeError("Could not infer shapes from state dict for MatryoshkaAutoEncoder")
+        else:
+            raise RuntimeError("Could not infer shapes from state dict for MatryoshkaAutoEncoder")
+
+        mat = MatryoshkaAutoEncoder(activation_dim=activation_dim, total_dict_size=total_dict_size, dict_size=active_dict_size or total_dict_size)
+
+        # load encoder weights if present
+        if 'encoder.weight' in state:
+            try:
+                mat.encoder.weight.data.copy_(state['encoder.weight'])
+            except Exception:
+                mat.encoder.weight.data.copy_(state['encoder.weight'].T)
+        if 'encoder.bias' in state and getattr(mat.encoder, 'bias', None) is not None:
+            mat.encoder.bias.data.copy_(state['encoder.bias'])
+
+        # load decoder weight if present
+        if 'decoder.weight' in state:
+            try:
+                mat.decoder.weight.data.copy_(state['decoder.weight'])
+            except Exception:
+                mat.decoder.weight.data.copy_(state['decoder.weight'].T)
+
+        if device is not None:
+            mat.to(device)
+        return mat

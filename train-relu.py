@@ -8,12 +8,14 @@ from dictionary_learning.trainers.standard_new import StandardTrainerNew
 from dictionary_learning.evaluation import evaluate
 import wandb
 import argparse
+import json
+import os
 from config import lm, activation_dim, layer, hf, steps, n_ctxs
-
+os.environ["WANDB_MODE"] = "disabled"
 parser = argparse.ArgumentParser()
 parser.add_argument("--gpu", required=True)
 parser.add_argument('--lr', type=float, default=5e-5) ## 3e-4
-parser.add_argument('--dict_ratio', type=int, default=32)
+parser.add_argument('--dict_ratio', type=int, default=32 // 32)
 parser.add_argument("--l1_penalties", nargs="+", type=float, required=True)
 args = parser.parse_args()
 
@@ -44,10 +46,12 @@ wandb.init(entity="amudide", project="ReLU", config={f'{trainer_config["wandb_na
 trainSAE(buffer, trainer_configs=trainer_configs, save_dir='dictionaries', log_steps=1, steps=steps)
 
 print("Training finished. Evaluating SAE...", flush=True)
-for i, trainer_config in enumerate(trainer_configs):
-    ae = AutoEncoderNew.from_pretrained(f'dictionaries/{cfg_filename(trainer_config)}/ae.pt', device=device)
-    metrics = evaluate(ae, buffer, device=device)
-    log = {}
-    log.update({f'{trainer_config["wandb_name"]}-{i}/{k}' : v for k, v in metrics.items()})
-    wandb.log(log, step=steps+1)
+with open("metrics_log.jsonl", "a") as f:
+    for i, trainer_config in enumerate(trainer_configs):
+        ae = AutoEncoderNew.from_pretrained(f'dictionaries/{cfg_filename(trainer_config)}/ae.pt', device=device)
+        metrics = evaluate(ae, buffer, device=device)
+        safe_config = {k: (str(v) if callable(v) or isinstance(v, type) else v) for k, v in trainer_config.items()}
+        record = {"trainer_config": safe_config, "metrics": metrics}
+        f.write(json.dumps(record, ensure_ascii=False, default=str) + "\n")
+        print(record)
 wandb.finish()
