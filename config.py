@@ -1,7 +1,7 @@
-lm = '/home/xuzhen/switch_sae/gpt2'
-activation_dim = 768
+lm = '/home/azureuser/Scale-Sparse-Autoencoder/gemma-2-2b'
+activation_dim = 2304
 layer = 8
-hf = '/home/xuzhen/switch_sae/openwebtext'
-hf_test = "/home/xuzhen/switch_sae/wikitext"
+hf = '/home/azureuser/Scale-Sparse-Autoencoder/openwebtext'
+hf_test = "/home/azureuser/Scale-Sparse-Autoencoder/wikitext"
 steps = 10_000
 n_ctxs = int(1e4)

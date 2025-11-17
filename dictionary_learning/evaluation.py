@@ -38,8 +38,9 @@ def loss_recovered(
     if type(temp_output) == tuple:
         output_is_tuple = True
 
-    # unmodified logits
+    # unmodified logits (save inputs early to avoid out-of-order errors)
     with model.trace(text, invoker_args=invoker_args):
+        inputs_saved = model.inputs.save()
         logits_original = model.output.save()
     # logits_original = logits_original.value
     
@@ -116,8 +117,7 @@ def loss_recovered(
                 submodule.output[:] = t.zeros_like(x)
         else:
             raise ValueError(f"Invalid value for io: {io}")
-        
-        input = model.inputs.save()
+
         logits_zero = model.output.save()
 
     # logits_zero = logits_zero.value
@@ -134,9 +134,9 @@ def loss_recovered(
         tokens = text
     else:
         try:
-            tokens = input[1]['input_ids']
+            tokens = inputs_saved[1]['input_ids']
         except:
-            tokens = input[1]['input']
+            tokens = inputs_saved[1]['input']
 
     # compute losses
     losses = []

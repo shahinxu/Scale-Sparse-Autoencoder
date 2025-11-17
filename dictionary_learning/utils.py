@@ -10,10 +10,10 @@ def hf_dataset_to_generator(dataset_name, split='train', streaming=True, max_len
 
     tokenizer = AutoTokenizer.from_pretrained(lm)
     if data is not None:
-        dataset = load_dataset(dataset_name, data, split=split, streaming=streaming)
+        dataset = load_dataset(dataset_name, data, split=split, streaming=streaming, trust_remote_code=True)
     else:
-        dataset = load_dataset(dataset_name, split=split, streaming=streaming)
-    
+        dataset = load_dataset(dataset_name, split=split, streaming=streaming, trust_remote_code=True)
+
     def gen():
         for x in iter(dataset):
             input_ids = tokenizer.encode(x['text'], truncation=True, max_length=max_length)

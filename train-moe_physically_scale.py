@@ -11,25 +11,28 @@ import itertools
 from config import lm, activation_dim, layer, hf, hf_test, steps, n_ctxs
 import os
 import json
-from transformers import BitsAndBytesConfig
+# from transformers import BitsAndBytesConfig
 os.environ["WANDB_MODE"] = "disabled"
 parser = argparse.ArgumentParser()
 parser.add_argument("--gpu", required=True)
-parser.add_argument('--dict_ratio', type=int, default=32)
+parser.add_argument('--dict_ratio', type=int, default=64)
 parser.add_argument("--ks", nargs="+", type=int, required=True)
 parser.add_argument("--num_experts", nargs="+", type=int, required=True)
 parser.add_argument("--es", nargs="+", type=int, required=True)
 parser.add_argument("--heavisides", nargs="+", type=str2bool, required=True)
 args = parser.parse_args()
-quant_config = BitsAndBytesConfig(
-    load_in_4bit=True,
-    bnb_4bit_quant_type="nf4",
-    bnb_4bit_use_double_quant=True,
-    bnb_4bit_compute_dtype=t.bfloat16
-)
+# quant_config = BitsAndBytesConfig(
+#     load_in_4bit=True,
+#     bnb_4bit_quant_type="nf4",
+#     bnb_4bit_use_double_quant=True,
+#     bnb_4bit_compute_dtype=t.bfloat16
+# )
 device = f'cuda:{args.gpu}'
-model = LanguageModel(lm, dispatch=True, device_map=device, quantization_config=quant_config)
-submodule = model.model.layers[layer]
+# model = LanguageModel(lm, dispatch=True, device_map=device, quantization_config=quant_config)
+# submodule = model.model.layers[layer]
+lm = "/home/azureuser/Scale-Sparse-Autoencoder/gpt2"
+model = LanguageModel(lm, dispatch=True, device_map=device)
+submodule = model.transformer.h[layer]
 data = hf_dataset_to_generator(hf)
 buffer = ActivationBuffer(data, model, submodule, d_submodule=activation_dim, n_ctxs=n_ctxs, device=device)
 test_data = hf_dataset_to_generator(hf_test, data='wikitext-103-raw-v1')
@@ -62,7 +65,8 @@ with open("metrics_log.jsonl", "a") as f:
         ae = MultiExpertScaleAutoEncoder.from_pretrained(
             f'dictionaries/{cfg_filename(trainer_config)}/ae.pt',
             k=trainer_config['k'], experts=trainer_config['experts'],
-            e=trainer_config['e'], heaviside=trainer_config['heaviside'], device=device
+            e=trainer_config['e'], heaviside=trainer_config['heaviside'], device=device,
+            activation_dim=activation_dim, dict_size=args.dict_ratio * activation_dim
         )
         metrics = evaluate(ae, buffer, device=device, using_decompose=True)
         safe_config = {k: (str(v) if callable(v) or isinstance(v, type) else v) for k, v in trainer_config.items()}
@@ -74,8 +78,8 @@ wandb.finish()
 # with open("metrics_log.jsonl", "a") as f:
 #     for i, trainer_config in enumerate(trainer_configs):
 #         ae = MultiExpertScaleAutoEncoder(
-#             activation_dim=768, 
-#             dict_size=32*768, 
+#             activation_dim=activation_dim, 
+#             dict_size=args.dict_ratio*activation_dim, 
 #             k=trainer_config['k'], 
 #             experts=trainer_config['experts'], 
 #             e=trainer_config['e'], 
