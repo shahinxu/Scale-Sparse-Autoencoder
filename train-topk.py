@@ -10,6 +10,7 @@ import argparse
 from config import lm, activation_dim, layer, hf, hf_test, steps, n_ctxs
 import os
 import json
+from transformers import BitsAndBytesConfig
 os.environ["WANDB_MODE"] = "disabled"
 parser = argparse.ArgumentParser()
 parser.add_argument("--gpu", required=True)
@@ -17,9 +18,15 @@ parser.add_argument('--dict_ratio', type=int, default=32 // 32)
 parser.add_argument("--ks", nargs="+", type=int, required=True)
 args = parser.parse_args()
 
+quant_config = BitsAndBytesConfig(
+    load_in_4bit=True,
+    bnb_4bit_quant_type="nf4",
+    bnb_4bit_use_double_quant=True,
+    bnb_4bit_compute_dtype=t.bfloat16
+)
 device = f'cuda:{args.gpu}'
-model = LanguageModel(lm, dispatch=True, device_map=device)
-submodule = model.transformer.h[layer]
+model = LanguageModel(lm, dispatch=True, device_map=device, quantization_config=quant_config)
+submodule = model.model.layers[layer]
 data = hf_dataset_to_generator(hf)
 buffer = ActivationBuffer(data, model, submodule, d_submodule=activation_dim, n_ctxs=n_ctxs, device=device)
 test_data = hf_dataset_to_generator(hf_test, data='wikitext-103-raw-v1')
@@ -49,7 +56,11 @@ trainSAE(buffer, trainer_configs=trainer_configs, save_dir='dictionaries', log_s
 print("Training finished. Evaluating SAE...", flush=True)
 with open("metrics_log.jsonl", "a") as f:
     for i, trainer_config in enumerate(trainer_configs):
-        ae = AutoEncoderTopK.from_pretrained(f'dictionaries/{cfg_filename(trainer_config)}/ae.pt', k = trainer_config['k'], device=device)
+        ae = AutoEncoderTopK.from_pretrained(
+            f'dictionaries/{cfg_filename(trainer_config)}/ae.pt', 
+            k = trainer_config['k'], 
+            device=device,
+        )
         metrics = evaluate(ae, buffer, device=device)
         safe_config = {k: (str(v) if callable(v) or isinstance(v, type) else v) for k, v in trainer_config.items()}
         record = {"trainer_config": safe_config, "metrics": metrics}

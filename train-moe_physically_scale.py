@@ -11,7 +11,7 @@ import itertools
 from config import lm, activation_dim, layer, hf, hf_test, steps, n_ctxs
 import os
 import json
-# from transformers import BitsAndBytesConfig
+from transformers import BitsAndBytesConfig
 os.environ["WANDB_MODE"] = "disabled"
 parser = argparse.ArgumentParser()
 parser.add_argument("--gpu", required=True)

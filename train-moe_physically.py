@@ -76,8 +76,8 @@ wandb.finish()
 # with open("metrics_log.jsonl", "a") as f:
 #     for i, trainer_config in enumerate(trainer_configs):
 #         ae = MultiExpertAutoEncoder(
-#             activation_dim=768, 
-#             dict_size=32*768, 
+#             activation_dim=activation_dim, 
+#             dict_size=args.dict_ratio * activation_dim, 
 #             k=trainer_config['k'], 
 #             experts=trainer_config['experts'], 
 #             e=trainer_config['e'], 
