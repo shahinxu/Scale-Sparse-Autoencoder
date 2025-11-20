@@ -16,14 +16,17 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--gpu", required=True)
 parser.add_argument('--lr', type=float, default=7e-5)
 parser.add_argument('--dict_ratio', type=int, default=32 // 32)
-parser.add_argument("--l0_penalties", nargs="+", type=float, required=True)
+parser.add_argument("--target_l0s", nargs="+", type=float, required=True) 
 args = parser.parse_args()
 
 device = f'cuda:{args.gpu}'
 model = LanguageModel(lm, dispatch=True, device_map=device)
 submodule = model.transformer.h[layer]
 data = hf_dataset_to_generator(hf)
-buffer = ActivationBuffer(data, model, submodule, d_submodule=activation_dim, n_ctxs=n_ctxs, device=device)
+buffer = ActivationBuffer(
+    data, model,
+    submodule, d_submodule=activation_dim,
+    n_ctxs=n_ctxs, device=device)
 
 base_trainer_config = {
     'trainer' : JumpReluTrainer,
@@ -36,11 +39,13 @@ base_trainer_config = {
     'device' : device,
     'layer' : layer,
     'lm_name' : lm,
-    'submodule_name' : submodule,
     'wandb_name' : 'JumpReluTrainer'
 }
 
-trainer_configs = [(base_trainer_config | {'l0_penalty': l0_penalty}) for l0_penalty in args.l0_penalties]
+trainer_configs = [
+    (base_trainer_config | {'target_l0': target_l0}) 
+    for target_l0 in args.target_l0s
+]
 
 wandb.init(
     entity="amudide", 
@@ -48,7 +53,10 @@ wandb.init(
     config={f'{trainer_config["wandb_name"]}-{i}' : trainer_config for i, 
             trainer_config in enumerate(trainer_configs)})
 
-trainSAE(buffer, trainer_configs=trainer_configs, save_dir='dictionaries', log_steps=1, steps=steps)
+trainSAE(
+    buffer, trainer_configs=trainer_configs, 
+    save_dir='dictionaries', 
+    log_steps=1, steps=steps)
 
 print("Training finished. Evaluating SAE...", flush=True)
 with open("metrics_log.jsonl", "a") as f:
@@ -63,3 +71,16 @@ with open("metrics_log.jsonl", "a") as f:
         f.write(json.dumps(record, ensure_ascii=False, default=str) + "\n")
         print(record)
 wandb.finish()
+
+# with open("metrics_log.jsonl", "a") as f:
+#     for i, trainer_config in enumerate(trainer_configs):
+#         ae = JumpReluAutoEncoder(activation_dim=activation_dim, 
+#                                  dict_size=args.dict_ratio * activation_dim, 
+#                                  )
+#         ae.load_state_dict(t.load(f"./dictionaries/jump_{int(args.target_l0s[i])}_{args.dict_ratio}/8.pt"))
+#         ae.to(device)
+#         metrics = evaluate(ae, buffer, device=device)
+#         safe_config = {k: (str(v) if callable(v) or isinstance(v, type) else v) for k, v in trainer_config.items()}
+#         record = {"trainer_config": safe_config, "metrics": metrics}
+#         f.write(json.dumps(record, ensure_ascii=False, default=str) + "\n")
+#         print(record)
