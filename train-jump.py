@@ -36,19 +36,27 @@ base_trainer_config = {
     'device' : device,
     'layer' : layer,
     'lm_name' : lm,
+    'submodule_name' : submodule,
     'wandb_name' : 'JumpReluTrainer'
 }
 
 trainer_configs = [(base_trainer_config | {'l0_penalty': l0_penalty}) for l0_penalty in args.l0_penalties]
 
-wandb.init(entity="amudide", project="Jump", config={f'{trainer_config["wandb_name"]}-{i}' : trainer_config for i, trainer_config in enumerate(trainer_configs)})
+wandb.init(
+    entity="amudide", 
+    project="Jump", 
+    config={f'{trainer_config["wandb_name"]}-{i}' : trainer_config for i, 
+            trainer_config in enumerate(trainer_configs)})
 
 trainSAE(buffer, trainer_configs=trainer_configs, save_dir='dictionaries', log_steps=1, steps=steps)
 
 print("Training finished. Evaluating SAE...", flush=True)
 with open("metrics_log.jsonl", "a") as f:
     for i, trainer_config in enumerate(trainer_configs):
-        ae = JumpReluAutoEncoder.from_pretrained(f'dictionaries/{cfg_filename(trainer_config)}/ae.pt', device=device)
+        ae = JumpReluAutoEncoder.from_pretrained(
+            f'dictionaries/{cfg_filename(trainer_config)}/ae.pt', 
+            device=device
+        )
         metrics = evaluate(ae, buffer, device=device)
         safe_config = {k: (str(v) if callable(v) or isinstance(v, type) else v) for k, v in trainer_config.items()}
         record = {"trainer_config": safe_config, "metrics": metrics}

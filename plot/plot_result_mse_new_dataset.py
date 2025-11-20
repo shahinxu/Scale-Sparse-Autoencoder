@@ -2,8 +2,8 @@ import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
 import numpy as np
 
-markers = ['o', 's', '^', 'D', 'v', '*']
-colors = ['#264653', '#2a9d8f', '#e9c46a', '#f4a261', '#e76f51', '#0f4c5c']
+markers = ['o', 's', '^', 'D', 'v', '*', 'P']
+colors = ['#e9c46a', '#f4a261', '#e76f51', '#264653', '#2a9d8f', '#0f4c5c', '#8a2be2']
 
 plt.rcParams.update({
     'font.size': 42,
@@ -24,9 +24,13 @@ data = {
 
 gated_k = [2.046143, 2.858521, 7.129517, 12.41503906, 33.4967041, 82.11975098, 217.4451904]
 gated_mse = [8317.752441, 7208.431885, 5616.853271, 4809.932129, 3869.896484, 3070.947266, 2220.185181]
+relu_k = [17.1583252, 17.91992188, 33.4, 39.7911377, 77.28234863, 359.7]
+relu_mse = [16481.47526, 15032.81478, 9098.353841, 6600.878255, 5146.635091, 2089.457275]
 
 data['Gated SAE'] = gated_mse
 data_kmap = { 'Gated SAE': gated_k }
+data['ReLU SAE'] = relu_mse
+data_kmap['ReLU SAE'] = relu_k
 
 plt.figure(figsize=(10, 8))
 
@@ -60,7 +64,7 @@ ax.set_yscale('log', base=10)
 ax.yaxis.set_major_locator(mticker.LogLocator(base=10.0, subs=(1.0,)))
 ax.yaxis.set_major_formatter(mticker.LogFormatterMathtext(base=10.0, labelOnlyBase=True))
 ax.yaxis.set_minor_locator(mticker.NullLocator())
-ax.set_ylim(top=1e4)
+# ax.set_ylim(top=1e4)
 
 # plt.legend(loc='lower left', frameon=True)
 
