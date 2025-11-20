@@ -2,7 +2,7 @@ set -euo pipefail
 
 cd "$(dirname "$0")"
 
-for ks in 2 4 8 16 64 128; do
+for ks in 0.1 0.5 1; do
     echo "========================================="
     echo "Training with ks=$ks"
     echo "========================================="
