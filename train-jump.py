@@ -1,5 +1,4 @@
 from nnsight import LanguageModel
-import torch as t
 from dictionary_learning import ActivationBuffer
 from dictionary_learning.training import trainSAE
 from dictionary_learning.utils import hf_dataset_to_generator, cfg_filename
