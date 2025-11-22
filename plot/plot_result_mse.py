@@ -1,8 +1,8 @@
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
 
-markers = ['o', 's', '^', 'D', 'v', '*', 'P']
-colors = ['#e9c46a', '#f4a261', '#e76f51', '#264653', '#2a9d8f', '#0f4c5c', '#8a2be2']
+markers = ['o', 's', '^', 'D', 'v', '*', 'P', 'X']
+colors = ['#e9c46a', '#f4a261', '#e76f51', '#264653', '#2a9d8f', '#0f4c5c', '#606c38', '#669bbc']
 
 plt.rcParams.update({
     'font.size': 42,
@@ -26,13 +26,18 @@ data = {
 gated_k = [2.046143, 2.858521, 7.129517, 12.41503906, 33.4967041, 82.11975098, 217.4451904]
 gated_mse = [7799.085938, 5966.50293, 4370.03418, 3585.277832, 2843.496094, 2202.016846, 1495.226563]
 
-relu_k = [17.1583252, 17.91992188, 33.4, 39.7911377, 77.28234863, 359.7]
-relu_mse = [27090.38672, 17314.46094, 8440.248047, 5207.692383, 3502.576904, 1120.955078]
-# Add Gated SAE to the plotting sequence (distinct marker/color)
+relu_k = [33.4, 39.7911377, 77.28234863, 359.7]
+relu_mse = [8440.248047, 5207.692383, 3502.576904, 1120.955078]
+
+jump_k = [3, 35.65783691, 48.17260742, 50.26379395, 62.65893555, 118.5947266]
+jump_mse = [4227, 2868.133301, 2640.021484, 2630.162354, 2396.959473, 2207.980713]
+
 data['Gated SAE'] = gated_mse
 data_kmap = { 'Gated SAE': gated_k }
 data['ReLU SAE'] = relu_mse
 data_kmap['ReLU SAE'] = relu_k
+data['Jump SAE'] = jump_mse
+data_kmap['Jump SAE'] = jump_k
 
 plt.figure(figsize=(10, 8))
 

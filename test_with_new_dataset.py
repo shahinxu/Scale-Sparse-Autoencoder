@@ -4,7 +4,7 @@ from dictionary_learning.utils import cfg_filename, str2bool
 from dictionary_learning.trainers.moe_physically_scale import MultiExpertScaleAutoEncoder
 from dictionary_learning.trainers.moe_physically import MultiExpertAutoEncoder
 from dictionary_learning.trainers.top_k import AutoEncoderTopK
-from dictionary_learning.dictionary import GatedAutoEncoder
+from dictionary_learning.dictionary import GatedAutoEncoder, JumpReluAutoEncoder
 import argparse
 import itertools
 from config import lm, activation_dim, layer
@@ -112,7 +112,12 @@ def loss_recovered_specialized(
                 submodule.output[:] = t.zeros_like(xout)
         else:
             raise ValueError(f"Invalid value for io: {io}")
-        inputs_saved = model.inputs.save()
+        # Only save model.inputs when we invoked with raw text (not pre-tokenized tensor),
+        # otherwise model.inputs.save() can raise an Envoy OutOfOrderError in this tracer.
+        if isinstance(text, t.Tensor):
+            inputs_saved = None
+        else:
+            inputs_saved = model.inputs.save()
         logits_zero = model.output.save()
 
     # get logits tensors
@@ -219,9 +224,48 @@ def compute_mse_dataset(
                     normalize_batch=False, io='out',
                     tracer_args={'use_cache': False, 'output_attentions': False}
                 )
-                denom = (loss_o - loss_z).item()
-                frac_rec = ((loss_r - loss_z) / (loss_o - loss_z)).item() if denom != 0 else float('nan')
-            except Exception:
+                # normalize tensors to Python floats safely
+                try:
+                    loss_o_v = float(loss_o.item()) if isinstance(loss_o, t.Tensor) else float(loss_o)
+                    loss_r_v = float(loss_r.item()) if isinstance(loss_r, t.Tensor) else float(loss_r)
+                    loss_z_v = float(loss_z.item()) if isinstance(loss_z, t.Tensor) else float(loss_z)
+                except Exception:
+                    loss_o_v, loss_r_v, loss_z_v = loss_o, loss_r, loss_z
+
+                # Unconditional debug print to inspect numeric values
+                print(f"[DEBUG_losses] batch={batch_idx} loss_o={loss_o_v} loss_r={loss_r_v} loss_z={loss_z_v}")
+                denom = loss_o_v - loss_z_v
+                if denom == 0 or (isinstance(denom, float) and (denom != denom)):
+                    # Debugging output to help locate why denominator is zero/NaN
+                    print(f"[DEBUG] batch={batch_idx} denom==0 or NaN -> loss_o={loss_o_v}, loss_r={loss_r_v}, loss_z={loss_z_v}")
+                    try:
+                        # Inspect the tensors that were replaced
+                        # Re-trace once to capture submodule output tensor shape
+                        with model.trace(input_ids.to(model.device), invoker_args={}, use_cache=False):
+                            tmp = submodule.output.save()
+                        try:
+                            val = tmp.value
+                        except Exception:
+                            val = tmp
+                        print(f"[DEBUG] traced submodule output type={type(val)}, shape={getattr(val, 'shape', None)}")
+                    except Exception as e:
+                        print(f"[DEBUG] failed to introspect submodule output: {e}")
+                    # Also inspect x and x_hat shapes if available
+                    try:
+                        print(f"[DEBUG] kept tensor shape: {kept.shape if 'kept' in locals() else 'N/A'}")
+                        x_sample = kept.to(device)
+                        x_hat_sample = ae(x_sample)
+                        print(f"[DEBUG] x_sample mean={float(x_sample.mean().item()):.6f} std={float(x_sample.std().item()):.6f}")
+                        print(f"[DEBUG] x_hat_sample mean={float(x_hat_sample.mean().item()):.6f} std={float(x_hat_sample.std().item()):.6f} shape={getattr(x_hat_sample, 'shape', None)}")
+                    except Exception as e:
+                        print(f"[DEBUG] failed to compute x/x_hat stats: {e}")
+                    frac_rec = float('nan')
+                else:
+                    frac_rec = ((loss_r_v - loss_z_v) / denom)
+            except Exception as e:
+                import traceback
+                print(f"[DEBUG] Exception computing recovered losses for batch {batch_idx}: {e}")
+                traceback.print_exc()
                 frac_rec = float('nan')
             sum_frac_recovered += frac_rec
             num_batches += 1
@@ -403,6 +447,8 @@ def main():
     parser.add_argument("--heavisides", nargs="+", type=str2bool, required=False)
     parser.add_argument("--model_types", nargs="+", type=str, default=["moe_scale"],
                         help="Which models to evaluate: moe_scale, moe, topk, gated")
+    parser.add_argument("--dictionary", type=str, default=None,
+                        help="Path to a checkpoint file for 'jump' model (e.g. ./dictionaries/jump_1_1/8.pt)")
     parser.add_argument("--topk_dict_ratio", type=int, default=1, help="dict_ratio for TopK (default 1 -> 768)")
     # If omitted, gated falls back to --dict_ratio
     parser.add_argument("--gated_dict_ratio", type=int, default=None, help="dict_ratio for Gated (overrides --dict_ratio if set)")
@@ -506,6 +552,27 @@ def main():
                 lrs = args.learning_rates if args.learning_rates is not None else [None]
                 trainer_configs = [base_cfg | ({'lr': lr} if lr is not None else {}) for lr in lrs]
                 loader = load_gated_or_fallback
+            elif model_type == 'jump':
+                # Jump model: load a JumpReluAutoEncoder from a provided checkpoint path
+                base_cfg = {
+                    'model_type': 'jump',
+                    'dict_class': JumpReluAutoEncoder,
+                    'activation_dim': activation_dim,
+                    'dict_size': args.dict_ratio * activation_dim,
+                    'device': device,
+                    'layer': layer,
+                    'lm_name': lm,
+                }
+                if args.dictionary is None:
+                    raise ValueError("--dictionary is required for model_type 'jump' and should point to a .pt file")
+                trainer_configs = [base_cfg]
+                def load_jump_or_fail(cfg: Dict[str, Any], device: str) -> JumpReluAutoEncoder:
+                    if not os.path.exists(args.dictionary):
+                        raise FileNotFoundError(f"Jump checkpoint not found at {args.dictionary}")
+                    # Use the class method which infers dict_size/activation_dim from the checkpoint
+                    ae = JumpReluAutoEncoder.from_pretrained(args.dictionary, device=device)
+                    return ae
+                loader = load_jump_or_fail
             else:
                 print(f"[warn] Unknown model_type '{model_type}', skipping.")
                 continue

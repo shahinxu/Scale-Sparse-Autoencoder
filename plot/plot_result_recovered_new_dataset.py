@@ -1,8 +1,8 @@
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
 
-markers = ['o', 's', '^', 'D', 'v', '*', 'P']
-colors = ['#e9c46a', '#f4a261', '#e76f51', '#264653', '#2a9d8f', '#0f4c5c', '#8a2be2']
+markers = ['o', 's', '^', 'D', 'v', '*', 'P', 'X']
+colors = ['#e9c46a', '#f4a261', '#e76f51', '#264653', '#2a9d8f', '#0f4c5c', '#606c38', '#669bbc']
 
 plt.rcParams.update({
     'font.size': 42,
@@ -23,14 +23,19 @@ data = {
 
 gated_k = [2.046143, 2.858521, 7.129517, 12.41503906, 33.4967041, 82.11975098, 217.4451904]
 gated_recovered = [0.646245956, 0.739900529, 0.828819364, 0.882518023, 0.930768758, 0.956792921, 0.972725451]
-relu_k = [17.1583252, 17.91992188, 33.4, 39.7911377, 77.28234863, 359.7]
-relu_recovered = [0.111119928, 0.098973153, 0.689136187, 0.776205103, 0.863858203, 0.974249005]
+
+relu_k = [33.4, 39.7911377, 77.28234863, 359.7]
+relu_recovered = [0.689136187, 0.776205103, 0.863858203, 0.974249005]
+
+jump_k = [3, 35.65783691, 48.17260742, 50.26379395, 62.65893555, 118.5947266]
+jump_recovered = [0.8025, 0.93697804, 0.942940726, 0.943723487, 0.948588516, 0.955030855]
 
 data['Gated SAE'] = gated_recovered
 data_kmap = { 'Gated SAE': gated_k }
 data['ReLU SAE'] = relu_recovered
 data_kmap['ReLU SAE'] = relu_k
-
+data['Jump SAE'] = jump_recovered
+data_kmap['Jump SAE'] = jump_k
 plt.figure(figsize=(10, 8))
 
 for i, (model, mse_values) in enumerate(data.items()):

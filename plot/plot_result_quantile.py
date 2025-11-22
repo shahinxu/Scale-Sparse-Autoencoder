@@ -1,8 +1,8 @@
 import matplotlib.pyplot as plt
 import numpy as np
 
-markers = ['o', 's', '^', 'D', 'v', '*']
-colors = ['#264653', '#2a9d8f', '#e9c46a', '#0f4c5c', '#e76f51', '#f4a261']
+markers = ['o', 's', '^', 'D', 'v', '*', 'P', 'X']
+colors = ['#e9c46a', '#f4a261', '#e76f51', '#264653', '#2a9d8f', '#0f4c5c', '#606c38', '#669bbc']
 
 plt.rcParams.update({
     'font.size': 42,
