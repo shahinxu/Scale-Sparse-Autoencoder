@@ -2,7 +2,7 @@ set -euo pipefail
 
 cd "$(dirname "$0")"
 
-for ks in 32 64 128; do
+for ks in 2 4 8 16 32 64 128; do
     echo "========================================="
     echo "Training with ks=$ks"
     echo "========================================="
@@ -11,7 +11,7 @@ for ks in 32 64 128; do
     --gpu 0 \
     --ks $ks \
     --num_experts 64 \
-    --es 2 \
+    --es 8 \
     --heavisides False; then
         echo "Error encountered during training with ks=$ks, skipping to next."
         echo ""

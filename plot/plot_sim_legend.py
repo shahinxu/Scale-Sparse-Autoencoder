@@ -2,8 +2,8 @@ import matplotlib.pyplot as plt
 import matplotlib.lines as mlines
 
 # Styling aligned with other plotting scripts
-markers = ['o', 's', '^', 'D', 'v', '*', 'P', 'X']
-colors = ['#e9c46a', '#f4a261', '#e76f51', '#264653', '#2a9d8f', '#0f4c5c', '#606c38', '#669bbc']
+markers = ['o', 's', '^', 'D', 'v']
+colors = ['#e9c46a', '#e76f51', '#264653', '#2a9d8f', '#0f4c5c']
 
 plt.rcParams.update({
     'font.size': 42,
@@ -16,19 +16,16 @@ def draw_legend_with_frame():
     # 1. 定义精确的颜色和样式
     # 颜色代码根据原图进行了微调，使其更接近
     legend_config = [
-        {'label': 'Scale SAE, e=8', 'color': colors[0], 'marker': markers[0], 'size': 26},
-        {'label': 'Scale SAE, e=4', 'color': colors[1], 'marker': markers[1], 'size': 26},
-        {'label': 'Scale SAE, e=2', 'color': colors[2], 'marker': markers[2], 'size': 26},
-        {'label': 'Switch SAE',       'color': colors[3], 'marker': markers[3], 'size': 26},
-        {'label': 'TopK SAE',         'color': colors[4], 'marker': markers[4], 'size': 26},
-        {'label': 'Gated SAE',        'color': colors[5], 'marker': markers[5], 'size': 26},
-        {'label': 'ReLU SAE',         'color': colors[6], 'marker': markers[6], 'size': 26},
-        {'label': 'JumpReLU SAE',         'color': colors[7], 'marker': markers[7], 'size': 26},
+        {'label': 'Switch SAE', 'color': colors[0], 'marker': markers[0], 'size': 26},
+        {'label': 'Scale SAE, e=2', 'color': colors[1], 'marker': markers[1], 'size': 26},
+        {'label': 'Scale SAE, e=4', 'color': colors[2], 'marker': markers[2], 'size': 26},
+        {'label': 'Scale SAE, e=8', 'color': colors[3], 'marker': markers[3], 'size': 26},
+        {'label': 'Scale SAE, e=16', 'color': colors[4], 'marker': markers[4], 'size': 26},
     ]
 
     # 2. 创建画布
     # 增加画布宽度以容纳大字体和间距
-    fig, ax = plt.subplots(figsize=(20, 1.2))
+    fig, ax = plt.subplots(figsize=(12, 1.2))
 
     # 3. 创建句柄
     handles = []

@@ -21,18 +21,18 @@ parser.add_argument("--num_experts", nargs="+", type=int, required=True)
 parser.add_argument("--es", nargs="+", type=int, required=True)
 parser.add_argument("--heavisides", nargs="+", type=str2bool, required=True)
 args = parser.parse_args()
-quant_config = BitsAndBytesConfig(
-    load_in_4bit=True,
-    bnb_4bit_quant_type="nf4",
-    bnb_4bit_use_double_quant=True,
-    bnb_4bit_compute_dtype=t.bfloat16
-)
+# quant_config = BitsAndBytesConfig(
+#     load_in_4bit=True,
+#     bnb_4bit_quant_type="nf4",
+#     bnb_4bit_use_double_quant=True,
+#     bnb_4bit_compute_dtype=t.bfloat16
+# )
 device = f'cuda:{args.gpu}'
-model = LanguageModel(lm, dispatch=True, device_map=device, quantization_config=quant_config)
-submodule = model.model.layers[layer]
-# lm = "/home/azureuser/Scale-Sparse-Autoencoder/gpt2"
-# model = LanguageModel(lm, dispatch=True, device_map=device)
-# submodule = model.transformer.h[layer]
+# model = LanguageModel(lm, dispatch=True, device_map=device, quantization_config=quant_config)
+# submodule = model.model.layers[layer]
+
+model = LanguageModel(lm, dispatch=True, device_map=device)
+submodule = model.transformer.h[layer]
 data = hf_dataset_to_generator(hf)
 buffer = ActivationBuffer(data, model, submodule, d_submodule=activation_dim, n_ctxs=n_ctxs, device=device)
 test_data = hf_dataset_to_generator(hf_test, data='wikitext-103-raw-v1')

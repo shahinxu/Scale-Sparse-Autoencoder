@@ -256,11 +256,11 @@ def evaluate(
     #     raise AttributeError("Dictionary must have 'decoders' or 'decoder' attribute.")
     if using_decompose:
         decoder_matrix, _, _ = dictionary.decompose_low_high(decoder_matrix, dictionary.beta)
-    # decoder_normed = decoder_matrix / decoder_matrix.norm(dim=1, keepdim=True)
-    # sim_matrix = decoder_normed @ decoder_normed.T
-    # sim_matrix.fill_diagonal_(-float("inf"))
-    # max_sim = sim_matrix.max(dim=1).values
-    # mean_max_sim = max_sim.mean().item()
-    # out["mean_decoder_max_similarity"] = mean_max_sim
-    # out["decoder_sim_above_0.9"] = (max_sim > 0.8).sum().item() / max_sim.numel()
+    decoder_normed = decoder_matrix / decoder_matrix.norm(dim=1, keepdim=True)
+    sim_matrix = decoder_normed @ decoder_normed.T
+    sim_matrix.fill_diagonal_(-float("inf"))
+    max_sim = sim_matrix.max(dim=1).values
+    mean_max_sim = max_sim.mean().item()
+    out["mean_decoder_max_similarity"] = mean_max_sim
+    out["decoder_sim_above_0.9"] = (max_sim > 0.8).sum().item() / max_sim.numel()
     return out
