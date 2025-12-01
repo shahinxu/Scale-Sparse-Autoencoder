@@ -1,6 +1,6 @@
 import torch as t
 import numpy as np
-from dictionary_learning.trainers.moe_physically import MultiExpertAutoEncoder
+from dictionary_learning.trainers.switch import MultiExpertAutoEncoder
 import matplotlib.pyplot as plt
 
 GPU = "5"

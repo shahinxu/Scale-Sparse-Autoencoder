@@ -1,8 +1,8 @@
 from nnsight import LanguageModel
 import torch as t
 from dictionary_learning.utils import cfg_filename, str2bool
-from dictionary_learning.trainers.moe_physically_scale import MultiExpertScaleAutoEncoder
-from dictionary_learning.trainers.moe_physically import MultiExpertAutoEncoder
+from dictionary_learning.trainers.scale import MultiExpertScaleAutoEncoder
+from dictionary_learning.trainers.switch import MultiExpertAutoEncoder
 from dictionary_learning.trainers.top_k import AutoEncoderTopK
 from dictionary_learning.dictionary import GatedAutoEncoder, JumpReluAutoEncoder
 import argparse

@@ -3,7 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import os
 import json
-from dictionary_learning.trainers.moe_physically_scale import MultiExpertScaleAutoEncoder
+from dictionary_learning.trainers.scale import MultiExpertScaleAutoEncoder
 
 def check_omega_values(model_path, activation_dim=768, dict_size=32*768, k=32, experts=64, e=1, heaviside=False, save_fig=False, output_dir=None, map_location='cpu'):
     """

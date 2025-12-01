@@ -1,7 +1,7 @@
 import torch as t
 from nnsight import LanguageModel
-from dictionary_learning.trainers.moe_physically import MultiExpertAutoEncoder
-from dictionary_learning.trainers.moe_physically_scale import MultiExpertScaleAutoEncoder
+from dictionary_learning.trainers.switch import MultiExpertAutoEncoder
+from dictionary_learning.trainers.scale import MultiExpertScaleAutoEncoder
 from dictionary_learning.trainers.top_k import AutoEncoderTopK
 import json
 from transformers import AutoTokenizer
