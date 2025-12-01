@@ -1,5 +1,5 @@
 import torch as t
-from ..trainers.trainer import (
+from .trainer import (
     SAETrainer, 
     set_decoder_norm_to_unit_norm, 
     remove_gradient_parallel_to_decoder_directions

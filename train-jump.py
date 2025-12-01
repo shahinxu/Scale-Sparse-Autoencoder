@@ -3,7 +3,7 @@ from dictionary_learning import ActivationBuffer
 from dictionary_learning.training import trainSAE
 from dictionary_learning.utils import hf_dataset_to_generator, cfg_filename
 from dictionary_learning.dictionary import JumpReluAutoEncoder
-from dictionary_learning.trainers.jump_relu import JumpReluTrainer
+from dictionary_learning.trainers.jump import JumpReluTrainer
 from dictionary_learning.evaluation import evaluate
 import torch as t
 import wandb
