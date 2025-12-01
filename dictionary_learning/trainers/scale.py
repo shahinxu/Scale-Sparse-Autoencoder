@@ -41,10 +41,17 @@ class Expert(nn.Module):
         self.encoder.bias.data.zero_()
         
         self.decoder = nn.Parameter(self.encoder.weight.data.clone())
+        self.set_decoder_norm_to_unit_norm()
     
     def forward(self, x):
         z = nn.functional.relu(self.encoder(x))
         return self.decoder(z), z
+    
+    @t.no_grad()
+    def set_decoder_norm_to_unit_norm(self):
+        eps = t.finfo(self.decoder.dtype).eps
+        norm = t.norm(self.decoder.data, dim=0, keepdim=True)
+        self.decoder.data /= norm + eps
 
 class MultiExpertScaleAutoEncoder(nn.Module):
     def __init__(self, activation_dim, dict_size, k, experts, e, heaviside=False):
@@ -94,10 +101,7 @@ class MultiExpertScaleAutoEncoder(nn.Module):
         for expert_idx, expert in enumerate(self.expert_modules):
             encoder_M = expert.encoder.weight
             M_hat, _, _ = self.decompose_low_high(encoder_M, self.omega[expert_idx], "encoder")
-            eps = t.finfo(M_hat.dtype).eps
-            norm = t.norm(M_hat, dim=0, keepdim=True)
-            M_hat_normalized = M_hat / (norm + eps)
-            z_expert = nn.functional.relu(nn.functional.linear(x - self.b_dec, M_hat_normalized, expert.encoder.bias))
+            z_expert = nn.functional.relu(nn.functional.linear(x - self.b_dec, M_hat, expert.encoder.bias))
             all_expert_outputs.append(z_expert)
 
         expert_stack = t.stack(all_expert_outputs, dim=0)
@@ -115,12 +119,10 @@ class MultiExpertScaleAutoEncoder(nn.Module):
         )
         x_hat = 0
         for expert_idx, (expert_top_acts, expert_local_indices) in enumerate(split_expert_data):
-            decoder_matrix = self.expert_modules[expert_idx].decoder
-            decoder_matrix, _, _ = self.decompose_low_high(decoder_matrix, self.beta[expert_idx], "decoder")
-            eps = t.finfo(decoder_matrix.dtype).eps
-            norm = t.norm(decoder_matrix, dim=0, keepdim=True)
-            decoder_matrix_normalized = decoder_matrix / (norm + eps)
-            d = TritonDecoder.apply(expert_local_indices, expert_top_acts, decoder_matrix_normalized.mT)
+            # decoder_matrix = self.expert_modules[expert_idx].decoder
+            # decoder_matrix, _, _ = self.decompose_low_high(decoder_matrix, self.beta[expert_idx], "decoder")
+            # d = TritonDecoder.apply(expert_local_indices, expert_top_acts, decoder_matrix.mT)
+            d = TritonDecoder.apply(expert_local_indices, expert_top_acts, self.expert_modules[expert_idx].decoder.mT)
             x_hat = x_hat + d
 
         return x_hat + self.b_dec
@@ -183,6 +185,11 @@ class MultiExpertScaleAutoEncoder(nn.Module):
             return x_hat
         else:
             return x_hat, f
+
+    @t.no_grad()
+    def set_decoder_norm_to_unit_norm(self):
+        for expert in self.expert_modules:
+            expert.set_decoder_norm_to_unit_norm()
 
     @t.no_grad()
     def remove_gradient_parallel_to_decoder_directions(self):
@@ -331,8 +338,8 @@ class MoETrainer(SAETrainer):
             self.ae.b_dec.data = median
             self.ae.b_gate.data = median
             
-        # 注意：归一化现在在前向传播中对 scaled 权重进行
-        # 不再对基础 decoder 权重进行归一化
+        # Make sure the decoder is still unit-norm
+        self.ae.set_decoder_norm_to_unit_norm()
         
         # compute the loss
         x = x.to(self.device)
