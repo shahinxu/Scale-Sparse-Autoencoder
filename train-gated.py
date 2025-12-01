@@ -9,14 +9,13 @@ from dictionary_learning.evaluation import evaluate
 import wandb
 import argparse
 from config import lm, activation_dim, layer, hf, steps, n_ctxs
-import os
 import json
-os.environ["WANDB_MODE"] = "disabled"
 parser = argparse.ArgumentParser()
 parser.add_argument("--gpu", required=True)
 parser.add_argument('--lr', type=float, default=1e-3) ## 3e-4, 5e-5
 parser.add_argument('--dict_ratio', type=int, default=32 // 32)
 parser.add_argument("--l1_penalties", nargs="+", type=float, required=True)
+parser.add_argument("--mode", type=str, choices=['train', 'test'], required=True)
 args = parser.parse_args()
 
 device = f'cuda:{args.gpu}'
@@ -42,29 +41,30 @@ base_trainer_config = {
 
 trainer_configs = [(base_trainer_config | {'l1_penalty': l1_penalty}) for l1_penalty in args.l1_penalties]
 
-wandb.init(entity="amudide", project="Gated-BigLR", config={f'{trainer_config["wandb_name"]}-{i}' : trainer_config for i, trainer_config in enumerate(trainer_configs)})
+if args.mode == 'train':
+    wandb.init(entity="amudide", project="Gated-BigLR", config={f'{trainer_config["wandb_name"]}-{i}' : trainer_config for i, trainer_config in enumerate(trainer_configs)})
 
-trainSAE(buffer, trainer_configs=trainer_configs, save_dir='dictionaries', log_steps=1, steps=steps)
+    trainSAE(buffer, trainer_configs=trainer_configs, save_dir='dictionaries', log_steps=1, steps=steps)
 
-print("Training finished. Evaluating SAE...", flush=True)
+    print("Training finished. Evaluating SAE...", flush=True)
 
-with open("metrics_log.jsonl", "a") as f:
-    for i, trainer_config in enumerate(trainer_configs):
-        ae = GatedAutoEncoder.from_pretrained(f'dictionaries/{cfg_filename(trainer_config)}/ae.pt', device=device)
-        metrics = evaluate(ae, buffer, device=device)
-        safe_config = {k: (str(v) if callable(v) or isinstance(v, type) else v) for k, v in trainer_config.items()}
-        record = {"trainer_config": safe_config, "metrics": metrics}
-        f.write(json.dumps(record, ensure_ascii=False, default=str) + "\n")
-        print(record)
-wandb.finish()
-
-# with open("metrics_log.jsonl", "a") as f:
-#     for i, trainer_config in enumerate(trainer_configs):
-#         ae = GatedAutoEncoder(activation_dim=768, dict_size=4*768, device=device)
-#         ae.load_state_dict(t.load("/home/xuzhen/switch_sae/dictionaries/gated_32_8/8.pt"))
-#         ae.to(device)
-#         metrics = evaluate(ae, buffer, device=device)
-#         safe_config = {k: (str(v) if callable(v) or isinstance(v, type) else v) for k, v in trainer_config.items()}
-#         record = {"trainer_config": safe_config, "metrics": metrics}
-#         f.write(json.dumps(record, ensure_ascii=False, default=str) + "\n")
-#         print(record)
+    with open("metrics_log.jsonl", "a") as f:
+        for i, trainer_config in enumerate(trainer_configs):
+            ae = GatedAutoEncoder.from_pretrained(f'dictionaries/{cfg_filename(trainer_config)}/ae.pt', device=device)
+            metrics = evaluate(ae, buffer, device=device)
+            safe_config = {k: (str(v) if callable(v) or isinstance(v, type) else v) for k, v in trainer_config.items()}
+            record = {"trainer_config": safe_config, "metrics": metrics}
+            f.write(json.dumps(record, ensure_ascii=False, default=str) + "\n")
+            print(record)
+    wandb.finish()
+else:  # test mode
+    with open("metrics_log.jsonl", "a") as f:
+        for i, trainer_config in enumerate(trainer_configs):
+            ae = GatedAutoEncoder(activation_dim=768, dict_size=4*768, device=device)
+            ae.load_state_dict(t.load("/home/xuzhen/switch_sae/dictionaries/gated_32_8/8.pt"))
+            ae.to(device)
+            metrics = evaluate(ae, buffer, device=device)
+            safe_config = {k: (str(v) if callable(v) or isinstance(v, type) else v) for k, v in trainer_config.items()}
+            record = {"trainer_config": safe_config, "metrics": metrics}
+            f.write(json.dumps(record, ensure_ascii=False, default=str) + "\n")
+            print(record)

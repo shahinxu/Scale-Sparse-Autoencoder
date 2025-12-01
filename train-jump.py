@@ -9,14 +9,13 @@ import torch as t
 import wandb
 import argparse
 import json
-import os
 from config import lm, activation_dim, layer, hf, steps, n_ctxs
-os.environ["WANDB_MODE"] = "disabled"
 parser = argparse.ArgumentParser()
 parser.add_argument("--gpu", required=True)
 parser.add_argument('--lr', type=float, default=7e-5)
 parser.add_argument('--dict_ratio', type=int, default=32 // 32)
-parser.add_argument("--target_l0s", nargs="+", type=float, required=True) 
+parser.add_argument("--target_l0s", nargs="+", type=float, required=True)
+parser.add_argument("--mode", type=str, choices=['train', 'test'], required=True)
 args = parser.parse_args()
 
 device = f'cuda:{args.gpu}'
@@ -47,41 +46,42 @@ trainer_configs = [
     for target_l0 in args.target_l0s
 ]
 
-# wandb.init(
-#     entity="amudide", 
-#     project="Jump", 
-#     config={f'{trainer_config["wandb_name"]}-{i}' : trainer_config for i, 
-#             trainer_config in enumerate(trainer_configs)})
+if args.mode == 'train':
+    wandb.init(
+        entity="amudide", 
+        project="Jump", 
+        config={f'{trainer_config["wandb_name"]}-{i}' : trainer_config for i, 
+                trainer_config in enumerate(trainer_configs)})
 
-# trainSAE(
-#     buffer, trainer_configs=trainer_configs, 
-#     save_dir='dictionaries', 
-#     log_steps=1, steps=steps)
+    trainSAE(
+        buffer, trainer_configs=trainer_configs, 
+        save_dir='dictionaries', 
+        log_steps=1, steps=steps)
 
-# print("Training finished. Evaluating SAE...", flush=True)
-# with open("metrics_log.jsonl", "a") as f:
-#     for i, trainer_config in enumerate(trainer_configs):
-#         ae = JumpReluAutoEncoder.from_pretrained(
-#             f'dictionaries/{cfg_filename(trainer_config)}/ae.pt', 
-#             device=device
-#         )
-#         metrics = evaluate(ae, buffer, device=device)
-#         safe_config = {k: (str(v) if callable(v) or isinstance(v, type) else v) for k, v in trainer_config.items()}
-#         record = {"trainer_config": safe_config, "metrics": metrics}
-#         f.write(json.dumps(record, ensure_ascii=False, default=str) + "\n")
-#         print(record)
-# wandb.finish()
-
-with open("metrics_log.jsonl", "a") as f:
-    for i, trainer_config in enumerate(trainer_configs):
-        ae = JumpReluAutoEncoder(activation_dim=activation_dim, 
-                                 dict_size=args.dict_ratio * activation_dim, 
-                                 )
-        # ae.load_state_dict(t.load(f"./dictionaries/jump_{int(args.target_l0s[i])}_{args.dict_ratio}/8.pt"))
-        ae.load_state_dict(t.load(f"./dictionaries/jump_1_1/8.pt"))
-        ae.to(device)
-        metrics = evaluate(ae, buffer, device=device)
-        safe_config = {k: (str(v) if callable(v) or isinstance(v, type) else v) for k, v in trainer_config.items()}
-        record = {"trainer_config": safe_config, "metrics": metrics}
-        f.write(json.dumps(record, ensure_ascii=False, default=str) + "\n")
-        print(record)
+    print("Training finished. Evaluating SAE...", flush=True)
+    with open("metrics_log.jsonl", "a") as f:
+        for i, trainer_config in enumerate(trainer_configs):
+            ae = JumpReluAutoEncoder.from_pretrained(
+                f'dictionaries/{cfg_filename(trainer_config)}/ae.pt', 
+                device=device
+            )
+            metrics = evaluate(ae, buffer, device=device)
+            safe_config = {k: (str(v) if callable(v) or isinstance(v, type) else v) for k, v in trainer_config.items()}
+            record = {"trainer_config": safe_config, "metrics": metrics}
+            f.write(json.dumps(record, ensure_ascii=False, default=str) + "\n")
+            print(record)
+    wandb.finish()
+else:  # test mode
+    with open("metrics_log.jsonl", "a") as f:
+        for i, trainer_config in enumerate(trainer_configs):
+            ae = JumpReluAutoEncoder(activation_dim=activation_dim, 
+                                     dict_size=args.dict_ratio * activation_dim, 
+                                     )
+            # ae.load_state_dict(t.load(f"./dictionaries/jump_{int(args.target_l0s[i])}_{args.dict_ratio}/8.pt"))
+            ae.load_state_dict(t.load(f"./dictionaries/jump_1_1/8.pt"))
+            ae.to(device)
+            metrics = evaluate(ae, buffer, device=device)
+            safe_config = {k: (str(v) if callable(v) or isinstance(v, type) else v) for k, v in trainer_config.items()}
+            record = {"trainer_config": safe_config, "metrics": metrics}
+            f.write(json.dumps(record, ensure_ascii=False, default=str) + "\n")
+            print(record)
